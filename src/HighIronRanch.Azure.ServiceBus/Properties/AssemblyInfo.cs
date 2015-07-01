@@ -5,12 +5,12 @@ using System.Runtime.InteropServices;
 // General Information about an assembly is controlled through the following 
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[assembly: AssemblyTitle("HighIronRanch.Azure")]
-[assembly: AssemblyDescription("")]
+[assembly: AssemblyTitle("HighIronRanch.Azure.ServiceBus")]
+[assembly: AssemblyDescription("HighIronRanch.Azure.ServiceBus provides a simpler interface to Azure Service Bus.")]
 [assembly: AssemblyConfiguration("")]
-[assembly: AssemblyCompany("")]
-[assembly: AssemblyProduct("HighIronRanch.Azure")]
-[assembly: AssemblyCopyright("Copyright ©  2015")]
+[assembly: AssemblyCompany("Stephen Balkum")]
+[assembly: AssemblyProduct("HighIronRanch.Azure.ServiceBus")]
+[assembly: AssemblyCopyright("Copyright © 2015 Stephen Balkum")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
@@ -20,7 +20,7 @@ using System.Runtime.InteropServices;
 [assembly: ComVisible(false)]
 
 // The following GUID is for the ID of the typelib if this project is exposed to COM
-[assembly: Guid("b4219853-51fd-4d2e-a30d-91fd287014e3")]
+[assembly: Guid("1b03741c-9211-4596-ab45-a3bb0b074929")]
 
 // Version information for an assembly consists of the following four values:
 //
@@ -32,5 +32,5 @@ using System.Runtime.InteropServices;
 // You can specify all the values or you can default the Build and Revision Numbers 
 // by using the '*' as shown below:
 // [assembly: AssemblyVersion("1.0.*")]
-[assembly: AssemblyVersion("1.0.0.0")]
-[assembly: AssemblyFileVersion("1.0.0.0")]
+[assembly: AssemblyVersion("1.0.0.4")]
+[assembly: AssemblyFileVersion("1.0.0.4")]

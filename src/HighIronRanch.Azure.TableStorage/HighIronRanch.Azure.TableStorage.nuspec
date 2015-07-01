@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<package >
+  <metadata>
+	<id>HighIronRanch.Azure.TableStorage</id>
+	<version>$version$</version>
+    <title>$title$</title>
+    <authors>$author$</authors>
+    <owners>$author$</owners>
+	<licenseUrl>https://github.com/sbalkum/HighIronRanch.Azure/blob/master/LICENSE</licenseUrl>
+	<projectUrl>https://github.com/sbalkum/HighIronRanch.Azure</projectUrl>
+	<requireLicenseAcceptance>false</requireLicenseAcceptance>
+	<description>$description$</description>
+	<summary>HighIronRanch.Azure.TableStorage implements a few utilities for reading and writing to Azure Table Storage.</summary>
+	<copyright>$copyright$</copyright>
+  </metadata>
+  <files>
+	<file src="bin\Release\HighIronRanch.Azure.TableStorage.pdb" target="lib\net45\HighIronRanch.Azure.TableStorage.pdb" />
+  </files>
+</package>
