@@ -1,4 +1,5 @@
-﻿using System.Threading.Tasks;
+﻿using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using Microsoft.ServiceBus;
 using Microsoft.ServiceBus.Messaging;
 
@@ -36,13 +37,25 @@ namespace HighIronRanch.Azure.ServiceBus
 				.Build();
 		}
 
+		protected static string CleanseName(string name)
+		{
+			// Entity segments can contain only letters, numbers, periods (.), hyphens (-), and underscores (_)
+			return Regex.Replace(name, @"[^a-zA-Z0-9\.\-_]", "_");
+		}
+
 		public async Task CreateQueueAsync(string name, bool isSessionRequired)
 		{
-			var qd = new QueueDescription(name);
+			var cleansedName = CleanseName(name);
+			await CreateCleansedNameQueueAsync(cleansedName, isSessionRequired);
+		}
+
+		private async Task CreateCleansedNameQueueAsync(string cleansedName, bool isSessionRequired)
+		{
+			var qd = new QueueDescription(cleansedName);
 			qd.RequiresSession = isSessionRequired;
 			qd.EnableDeadLetteringOnMessageExpiration = true;
 
-			if (!_manager.QueueExists(name))
+			if (!_manager.QueueExists(cleansedName))
 				await _manager.CreateQueueAsync(qd);
 		}
 
@@ -53,44 +66,52 @@ namespace HighIronRanch.Azure.ServiceBus
 
 		public async Task<QueueClient> CreateQueueClientAsync(string name, bool isSessionRequired)
 		{
-			await CreateQueueAsync(name, isSessionRequired);
+			var cleansedName = CleanseName(name);
+			await CreateCleansedNameQueueAsync(cleansedName, isSessionRequired);
 
-			return QueueClient.CreateFromConnectionString(_settings.AzureServiceBusConnectionString, name);
+			return QueueClient.CreateFromConnectionString(_settings.AzureServiceBusConnectionString, cleansedName);
 		}
 
 		public async Task DeleteQueueAsync(string name)
 		{
-			await _manager.DeleteQueueAsync(name);
+			var cleansedName = CleanseName(name);
+			await _manager.DeleteQueueAsync(cleansedName);
 		}
 
 		public async Task<TopicClient> CreateTopicClientAsync(string name)
 		{
-			var td = new TopicDescription(name);
+			var cleansedName = CleanseName(name);
+			var td = new TopicDescription(cleansedName);
 
-			if (!_manager.TopicExists(name))
+			if (!_manager.TopicExists(cleansedName))
 				await _manager.CreateTopicAsync(td);
 
-			return TopicClient.CreateFromConnectionString(_settings.AzureServiceBusConnectionString, name);
+			return TopicClient.CreateFromConnectionString(_settings.AzureServiceBusConnectionString, cleansedName);
 		}
 
 		public async Task DeleteTopicAsync(string name)
 		{
-			await _manager.DeleteTopicAsync(name);
+			var cleansedName = CleanseName(name);
+			await _manager.DeleteTopicAsync(cleansedName);
 		}
 
 		public async Task<SubscriptionClient> CreateSubscriptionClientAsync(string topicName, string subscriptionName)
 		{
-			var sd = new SubscriptionDescription(topicName, subscriptionName);
+			var cleansedTopicName = CleanseName(topicName);
+			var cleansedSubscriptionName = CleanseName(subscriptionName);
+			var sd = new SubscriptionDescription(cleansedTopicName, cleansedSubscriptionName);
 
-			if (!_manager.SubscriptionExists(topicName, subscriptionName))
+			if (!_manager.SubscriptionExists(cleansedTopicName, subscriptionName))
 				await _manager.CreateSubscriptionAsync(sd);
 
-			return SubscriptionClient.CreateFromConnectionString(_settings.AzureServiceBusConnectionString, topicName, subscriptionName);
+			return SubscriptionClient.CreateFromConnectionString(_settings.AzureServiceBusConnectionString, cleansedTopicName, cleansedSubscriptionName);
 		}
 
 		public async Task DeleteSubscriptionAsync(string topicName, string subscriptionName)
 		{
-			await _manager.DeleteSubscriptionAsync(topicName, subscriptionName);
+			var cleansedTopicName = CleanseName(topicName);
+			var cleansedSubscriptionName = CleanseName(subscriptionName);
+			await _manager.DeleteSubscriptionAsync(cleansedTopicName, cleansedSubscriptionName);
 		}
 	}
 }

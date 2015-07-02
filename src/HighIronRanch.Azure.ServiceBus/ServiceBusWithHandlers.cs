@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using HighIronRanch.Azure.ServiceBus.Contracts;
@@ -26,22 +25,22 @@ namespace HighIronRanch.Azure.ServiceBus
 		private bool _useJsonSerialization = true;
 		private readonly IHandlerActivator _handlerActivator;
 		private readonly ILogger _logger;
-		private CancellationToken _cancellationToken = new CancellationToken();
+		protected CancellationToken _cancellationToken = new CancellationToken();
 
 		// IMessage, QueueClient
-		private readonly IDictionary<Type, QueueClient> _queueClients = new Dictionary<Type, QueueClient>();
+		protected readonly IDictionary<Type, QueueClient> _queueClients = new Dictionary<Type, QueueClient>();
 		
 		// IMessage, IMessageHandler
-		private readonly IDictionary<Type, Type> _queueHandlers = new Dictionary<Type, Type>();
+		protected readonly IDictionary<Type, Type> _queueHandlers = new Dictionary<Type, Type>();
 
 		// IEvent, TopicClient
-		private readonly IDictionary<Type, TopicClient> _topicClients = new Dictionary<Type, TopicClient>();
+		protected readonly IDictionary<Type, TopicClient> _topicClients = new Dictionary<Type, TopicClient>();
  
 		// IEvent, IEventHandler
-		private readonly IDictionary<Type, Type> _eventHandlers = new Dictionary<Type, Type>();
+		protected readonly IDictionary<Type, Type> _eventHandlers = new Dictionary<Type, Type>();
 
 		// IEventHandler, IEvent
-		private readonly IDictionary<Type, Type> _subscriptions = new Dictionary<Type, Type>(); 
+		protected readonly IDictionary<Type, Type> _subscriptions = new Dictionary<Type, Type>(); 
 
 		public ServiceBusWithHandlers(IServiceBus serviceBus, IHandlerActivator handlerActivator, ILogger logger)
 		{
@@ -127,7 +126,7 @@ namespace HighIronRanch.Azure.ServiceBus
 				new BrokeredMessage(JsonConvert.SerializeObject(message)) :
 				new BrokeredMessage(message);
 
-			brokeredMessage.ContentType = message.GetType().FullName;
+			brokeredMessage.ContentType = message.GetType().AssemblyQualifiedName;
 			if (isCommand)
 			{
 				brokeredMessage.SessionId = ((ICommand) message).GetSessionId().ToString();
@@ -172,7 +171,7 @@ namespace HighIronRanch.Azure.ServiceBus
 				new BrokeredMessage(JsonConvert.SerializeObject(evt)) :
 				new BrokeredMessage(evt);
 
-			brokeredMessage.ContentType = evt.GetType().FullName;
+			brokeredMessage.ContentType = evt.GetType().AssemblyQualifiedName;
 
 			await client.SendAsync(brokeredMessage);
 		}
