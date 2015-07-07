@@ -4,6 +4,6 @@ namespace HighIronRanch.Azure.ServiceBus.Contracts
 {
 	public interface IMessageHandler<T> where T : IMessage
 	{
-		Task HandleAsync(T message);
+		Task HandleAsync(T message, IMessageActions actions);
 	}
 }

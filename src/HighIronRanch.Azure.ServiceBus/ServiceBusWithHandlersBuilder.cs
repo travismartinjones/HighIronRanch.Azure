@@ -135,7 +135,7 @@ namespace HighIronRanch.Azure.ServiceBus
 
 				var commandTypesInAssemblies = assemblies
 					.SelectMany(assembly => assembly.GetTypes())
-					.Where(type => DoesTypeImplementInterface(type, typeof (IMessage)));
+					.Where(type => type.DoesTypeImplementInterface(typeof (IMessage)));
 
 				await CreateQueuesAsync(commandTypesInAssemblies, bus);
 			}
@@ -149,7 +149,7 @@ namespace HighIronRanch.Azure.ServiceBus
 
 				var eventTypesInAssemblies = assemblies
 					.SelectMany(assembly => assembly.GetTypes())
-					.Where(type => DoesTypeImplementInterface(type, typeof (IEvent)));
+					.Where(type => type.DoesTypeImplementInterface(typeof (IEvent)));
 
 				await CreateEventsAsync(eventTypesInAssemblies, bus);
 			}
@@ -209,27 +209,13 @@ namespace HighIronRanch.Azure.ServiceBus
 
 		private static bool DoesTypeImplementGenericInterface(Type type, Type @interface)
 		{
-			if (!DoesTypeImplementInterface(type, @interface))
+			if (!type.DoesTypeImplementInterface(@interface))
 				return false;
 
 			if (type.GetInterfaces().Any(i => i.IsGenericType && i.GetGenericTypeDefinition() == @interface))
 				return true;
 
 			return false;
-		}
-
-		private static bool DoesTypeImplementInterface(Type type, Type @interface)
-		{
-			if (type.IsAbstract || type.IsInterface)
-				return false;
-
-			// This doesn't work: typeof(IMessageHandler<>).IsAssignableFrom(typeof(TestMessageHandler))
-			//return @interface.IsAssignableFrom(type);
-
-			// But this does:
-			return type
-				.GetInterfaces()
-				.Any(x => x.IsGenericType && x.GetGenericTypeDefinition() == @interface);
 		}
 
 		private async Task CreateQueuesAsync(IEnumerable<Type> commandTypes, ServiceBusWithHandlers bus)

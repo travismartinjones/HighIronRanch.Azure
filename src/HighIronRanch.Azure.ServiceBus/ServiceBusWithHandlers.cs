@@ -30,7 +30,7 @@ namespace HighIronRanch.Azure.ServiceBus
 		// IMessage, QueueClient
 		protected readonly IDictionary<Type, QueueClient> _queueClients = new Dictionary<Type, QueueClient>();
 		
-		// IMessage, IMessageHandler
+		// IMessage, IMessageHandler/IMessageLongHandler
 		protected readonly IDictionary<Type, Type> _queueHandlers = new Dictionary<Type, Type>();
 
 		// IEvent, TopicClient
@@ -70,6 +70,7 @@ namespace HighIronRanch.Azure.ServiceBus
 					_serviceBus.DeleteSubscriptionAsync(_subscriptions[eventHandler].FullName, eventHandler.FullName);
 				}
 
+/*
 				foreach (var topicClient in _topicClients.Values)
 				{
 					topicClient.Close();
@@ -79,6 +80,7 @@ namespace HighIronRanch.Azure.ServiceBus
 				{
 					queueClient.Close();
 				}
+*/
 			}
 		}
 
@@ -252,9 +254,8 @@ namespace HighIronRanch.Azure.ServiceBus
 				var handlerType = _queueHandlers[messageType];
 				var handler = _handlerActivator.GetInstance(handlerType);
 
-				var handleMethodInfo = handlerType.GetMethod("HandleAsync", new[] {messageType});
-
-				var task = (Task)handleMethodInfo.Invoke(handler, new[] {message});
+				var handleMethodInfo = handlerType.GetMethod("HandleAsync", new[] { messageType, typeof(IMessageActions) });
+				var task = (Task)handleMethodInfo.Invoke(handler, new[] { message, new MessageActions(messageToHandle) });
 				task.Wait();
 
 				messageToHandle.Complete();

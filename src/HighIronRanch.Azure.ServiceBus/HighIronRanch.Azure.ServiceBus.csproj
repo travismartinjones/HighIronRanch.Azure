@@ -30,9 +30,9 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="HighIronRanch.Azure.ServiceBus.Contracts, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\HighIronRanch.Azure.ServiceBus.Contracts.1.0.0.0\lib\net45\HighIronRanch.Azure.ServiceBus.Contracts.dll</HintPath>
-      <Private>True</Private>
+    <Reference Include="HighIronRanch.Azure.ServiceBus.Contracts, Version=1.0.0.1, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\packages\HighIronRanch.Azure.ServiceBus.Contracts.1.0.0.1\lib\net45\HighIronRanch.Azure.ServiceBus.Contracts.dll</HintPath>
     </Reference>
     <Reference Include="HighIronRanch.Core, Version=1.0.7.2, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>..\packages\HighIronRanch.Core.1.0.7.2\lib\net45\HighIronRanch.Core.dll</HintPath>
@@ -61,11 +61,13 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="MessageActions.cs" />
     <Compile Include="NamespaceManagerBuilder.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="ServiceBus.cs" />
     <Compile Include="ServiceBusWithHandlers.cs" />
     <Compile Include="ServiceBusWithHandlersBuilder.cs" />
+    <Compile Include="TypeExtensions.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="app.config" />

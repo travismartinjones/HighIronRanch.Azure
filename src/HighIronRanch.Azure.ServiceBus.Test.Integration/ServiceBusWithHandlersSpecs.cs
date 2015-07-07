@@ -20,10 +20,22 @@ namespace HighIronRanch.Azure.ServiceBus.Test.Integration
 		{
 			public static string LastHandledContent;
 
-			public Task HandleAsync(TestMessage message)
+			public async Task HandleAsync(TestMessage message, IMessageActions actions)
 			{
 				LastHandledContent = message.Content;
-				return Task.FromResult(0);
+			}
+		}
+
+		public class TestMessageLongHandler : IMessageHandler<TestMessage>
+		{
+			public static string LastHandledContent;
+
+			public async Task HandleAsync(TestMessage message, IMessageActions actions)
+			{
+				Thread.Sleep(55000);
+				await actions.RenewLockAsync();
+				Thread.Sleep(10000);
+				LastHandledContent = message.Content;
 			}
 		}
 
@@ -35,6 +47,9 @@ namespace HighIronRanch.Azure.ServiceBus.Test.Integration
 				{
 					case "TestMessageHandler":
 						return new TestMessageHandler();
+
+					case "TestMessageLongHandler":
+						return new TestMessageLongHandler();
 				}
 
 				throw new ArgumentException("Unknown handler to activate: " + type.Name);
@@ -62,7 +77,9 @@ namespace HighIronRanch.Azure.ServiceBus.Test.Integration
 		{
 			private Cleanup cc = () =>
 			{
-				_serviceBus.DeleteQueueAsync(typeof (TestMessage).FullName);
+				var task = _serviceBus.DeleteQueueAsync(typeof (TestMessage).FullName);
+				task.Wait();
+				//sut.Dispose();
 			};
 		}
 
@@ -97,10 +114,48 @@ namespace HighIronRanch.Azure.ServiceBus.Test.Integration
 					Thread.Sleep(100);
 					i--;
 				} while (i > 0 && TestMessageHandler.LastHandledContent != _testContent);
-				Thread.Sleep(100);
 			};
 
 			private It should_be_handled = () => TestMessageHandler.LastHandledContent.ShouldEqual(_testContent);
+		}
+
+		public class When_sending_a_long_running_message : CleaningConcern
+		{
+			private static string _testContent = Guid.NewGuid().ToString();
+
+			private Establish context = () =>
+			{
+				var logger = fake.an<ILogger>();
+				var activator = new HandlerActivator();
+
+				sut_factory.create_using(() =>
+				{
+					var busBuilder = new ServiceBusWithHandlersBuilder(_serviceBus, activator, logger);
+
+					busBuilder.CreateServiceBus()
+						.WithMessageHandlers(new List<Type>() { typeof(TestMessageLongHandler) });
+					var task = busBuilder.BuildAsync();
+					task.Wait();
+					return task.Result;
+				});
+			};
+
+			private Because of = () =>
+			{
+				sut.SendAsync(new TestMessage() { Content = _testContent });
+				// The handler takes a while
+				Thread.Sleep(59000);
+				// start watching for message to come across
+				var i = 15;
+				do
+				{
+					Thread.Sleep(1000);
+					i--;
+				} while (i > 0 && TestMessageLongHandler.LastHandledContent != _testContent);
+				Thread.Sleep(100);
+			};
+
+			private It should_be_handled = () => TestMessageLongHandler.LastHandledContent.ShouldEqual(_testContent);
 		}
 	}
 }
