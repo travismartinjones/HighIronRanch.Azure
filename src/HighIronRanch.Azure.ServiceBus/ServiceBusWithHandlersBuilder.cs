@@ -135,7 +135,7 @@ namespace HighIronRanch.Azure.ServiceBus
 
 				var commandTypesInAssemblies = assemblies
 					.SelectMany(assembly => assembly.GetTypes())
-					.Where(type => type.DoesTypeImplementInterface(typeof (IMessage)));
+					.Where(type => type.DoesTypeImplementInterface(typeof (ICommand)));
 
 				await CreateQueuesAsync(commandTypesInAssemblies, bus);
 			}
@@ -201,7 +201,7 @@ namespace HighIronRanch.Azure.ServiceBus
 
 				var handlerTypesInAssemblies = assemblies
 					.SelectMany(assembly => assembly.GetTypes())
-					.Where(type => DoesTypeImplementGenericInterface(type, typeof (IMessageHandler<>)));
+					.Where(type => DoesTypeImplementGenericInterface(type, typeof (ICommandHandler<>)));
 
 				await CreateHandledQueuesAsync(handlerTypesInAssemblies, bus);
 			}

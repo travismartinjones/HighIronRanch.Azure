@@ -39,14 +39,14 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="ICommand.cs" />
-    <Compile Include="ICommandHandler.cs" />
+    <Compile Include="IAggregateCommand.cs" />
+    <Compile Include="IAggregateCommandHandler.cs" />
     <Compile Include="IEvent.cs" />
     <Compile Include="IEventHandler.cs" />
     <Compile Include="IHandlerActivator.cs" />
-    <Compile Include="IMessage.cs" />
-    <Compile Include="IMessageActions.cs" />
-    <Compile Include="IMessageHandler.cs" />
+    <Compile Include="ICommand.cs" />
+    <Compile Include="ICommandActions.cs" />
+    <Compile Include="ICommandHandler.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>

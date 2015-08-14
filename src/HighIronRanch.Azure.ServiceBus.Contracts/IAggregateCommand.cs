@@ -2,8 +2,8 @@ using System;
 
 namespace HighIronRanch.Azure.ServiceBus.Contracts
 {
-	public interface IHandlerActivator
+	public interface IAggregateCommand : ICommand
 	{
-		object GetInstance(Type type);
+		Guid GetAggregateId();
 	}
 }

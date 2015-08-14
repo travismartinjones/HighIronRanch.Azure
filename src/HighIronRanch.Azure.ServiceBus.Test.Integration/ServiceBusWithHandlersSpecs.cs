@@ -11,31 +11,31 @@ namespace HighIronRanch.Azure.ServiceBus.Test.Integration
 {
 	public class ServiceBusWithHandlersSpecs
 	{
-		public class TestMessage : IMessage
+		public class TestCommand : ICommand
 		{
 			public string Content;
 		}
 
-		public class TestMessageHandler : IMessageHandler<TestMessage>
+		public class TestCommandHandler : ICommandHandler<TestCommand>
 		{
 			public static string LastHandledContent;
 
-			public async Task HandleAsync(TestMessage message, IMessageActions actions)
+			public async Task HandleAsync(TestCommand command, ICommandActions actions)
 			{
-				LastHandledContent = message.Content;
+				LastHandledContent = command.Content;
 			}
 		}
 
-		public class TestMessageLongHandler : IMessageHandler<TestMessage>
+		public class TestCommandLongHandler : ICommandHandler<TestCommand>
 		{
 			public static string LastHandledContent;
 
-			public async Task HandleAsync(TestMessage message, IMessageActions actions)
+			public async Task HandleAsync(TestCommand command, ICommandActions actions)
 			{
 				Thread.Sleep(55000);
 				await actions.RenewLockAsync();
 				Thread.Sleep(10000);
-				LastHandledContent = message.Content;
+				LastHandledContent = command.Content;
 			}
 		}
 
@@ -45,11 +45,11 @@ namespace HighIronRanch.Azure.ServiceBus.Test.Integration
 			{
 				switch (type.Name)
 				{
-					case "TestMessageHandler":
-						return new TestMessageHandler();
+					case "TestCommandHandler":
+						return new TestCommandHandler();
 
-					case "TestMessageLongHandler":
-						return new TestMessageLongHandler();
+					case "TestCommandLongHandler":
+						return new TestCommandLongHandler();
 				}
 
 				throw new ArgumentException("Unknown handler to activate: " + type.Name);
@@ -77,7 +77,7 @@ namespace HighIronRanch.Azure.ServiceBus.Test.Integration
 		{
 			private Cleanup cc = () =>
 			{
-				var task = _serviceBus.DeleteQueueAsync(typeof (TestMessage).FullName);
+				var task = _serviceBus.DeleteQueueAsync(typeof (TestCommand).FullName);
 				task.Wait();
 				//sut.Dispose();
 			};
@@ -97,7 +97,7 @@ namespace HighIronRanch.Azure.ServiceBus.Test.Integration
 					var busBuilder = new ServiceBusWithHandlersBuilder(_serviceBus, activator, logger);
 
 					busBuilder.CreateServiceBus()
-						.WithMessageHandlers(new List<Type>() {typeof (TestMessageHandler)});
+						.WithMessageHandlers(new List<Type>() {typeof (TestCommandHandler)});
 					var task = busBuilder.BuildAsync();
 					task.Wait();
 					return task.Result;
@@ -106,34 +106,35 @@ namespace HighIronRanch.Azure.ServiceBus.Test.Integration
 
 			private Because of = () =>
 			{
-				sut.SendAsync(new TestMessage() { Content = _testContent });
+				sut.SendAsync(new TestCommand() { Content = _testContent });
 				// give a few seconds for message to come across
 				var i = 30;
 				do
 				{
 					Thread.Sleep(100);
 					i--;
-				} while (i > 0 && TestMessageHandler.LastHandledContent != _testContent);
+				} while (i > 0 && TestCommandHandler.LastHandledContent != _testContent);
 			};
 
-			private It should_be_handled = () => TestMessageHandler.LastHandledContent.ShouldEqual(_testContent);
+			private It should_be_handled = () => TestCommandHandler.LastHandledContent.ShouldEqual(_testContent);
 		}
 
 		public class When_sending_a_long_running_message : CleaningConcern
 		{
+			private static string _context = "Long running test";
 			private static string _testContent = Guid.NewGuid().ToString();
+			private static ILogger _logger = new TraceLogger();
 
 			private Establish context = () =>
 			{
-				var logger = fake.an<ILogger>();
 				var activator = new HandlerActivator();
 
 				sut_factory.create_using(() =>
 				{
-					var busBuilder = new ServiceBusWithHandlersBuilder(_serviceBus, activator, logger);
+					var busBuilder = new ServiceBusWithHandlersBuilder(_serviceBus, activator, _logger);
 
 					busBuilder.CreateServiceBus()
-						.WithMessageHandlers(new List<Type>() { typeof(TestMessageLongHandler) });
+						.WithMessageHandlers(new List<Type>() { typeof(TestCommandLongHandler) });
 					var task = busBuilder.BuildAsync();
 					task.Wait();
 					return task.Result;
@@ -142,7 +143,8 @@ namespace HighIronRanch.Azure.ServiceBus.Test.Integration
 
 			private Because of = () =>
 			{
-				sut.SendAsync(new TestMessage() { Content = _testContent });
+				sut.SendAsync(new TestCommand() { Content = _testContent });
+				_logger.Information(_context, "Command sent");
 				// The handler takes a while
 				Thread.Sleep(59000);
 				// start watching for message to come across
@@ -151,11 +153,12 @@ namespace HighIronRanch.Azure.ServiceBus.Test.Integration
 				{
 					Thread.Sleep(1000);
 					i--;
-				} while (i > 0 && TestMessageLongHandler.LastHandledContent != _testContent);
+					_logger.Information(_context, "Looking for content");
+				} while (i > 0 && TestCommandLongHandler.LastHandledContent != _testContent);
 				Thread.Sleep(100);
 			};
 
-			private It should_be_handled = () => TestMessageLongHandler.LastHandledContent.ShouldEqual(_testContent);
+			private It should_be_handled = () => TestCommandLongHandler.LastHandledContent.ShouldEqual(_testContent);
 		}
 	}
 }

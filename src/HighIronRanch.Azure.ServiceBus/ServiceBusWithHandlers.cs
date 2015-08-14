@@ -13,7 +13,7 @@ namespace HighIronRanch.Azure.ServiceBus
 	public interface IServiceBusWithHandlers : IDisposable
 	{
 		void UseJsonMessageSerialization(bool useJsonSerialization);
-		Task SendAsync(IMessage message);
+		Task SendAsync(ICommand command);
 		Task PublishAsync(IEvent evt);
 	}
 
@@ -94,7 +94,7 @@ namespace HighIronRanch.Azure.ServiceBus
 			if (_queueClients.ContainsKey(type))
 				return;
 
-			var isCommand = typeof(ICommand).IsAssignableFrom(type);
+			var isCommand = typeof(IAggregateCommand).IsAssignableFrom(type);
 
 			_logger.Information(LoggerContext, "Creating {0} queue for {1}", isCommand ? "command" : "message", type);
 
@@ -118,20 +118,20 @@ namespace HighIronRanch.Azure.ServiceBus
 			}
 		}
 
-		public async Task SendAsync(IMessage message)
+		public async Task SendAsync(ICommand command)
 		{
-			var isCommand = message is ICommand;
-			var client = _queueClients[message.GetType()];
+			var isCommand = command is IAggregateCommand;
+			var client = _queueClients[command.GetType()];
 
 			var brokeredMessage = 
 				_useJsonSerialization ?
-				new BrokeredMessage(JsonConvert.SerializeObject(message)) :
-				new BrokeredMessage(message);
+				new BrokeredMessage(JsonConvert.SerializeObject(command)) :
+				new BrokeredMessage(command);
 
-			brokeredMessage.ContentType = message.GetType().AssemblyQualifiedName;
+			brokeredMessage.ContentType = command.GetType().AssemblyQualifiedName;
 			if (isCommand)
 			{
-				brokeredMessage.SessionId = ((ICommand) message).GetSessionId().ToString();
+				brokeredMessage.SessionId = ((IAggregateCommand) command).GetAggregateId().ToString();
 			}
 
 			await client.SendAsync(brokeredMessage);
@@ -184,7 +184,7 @@ namespace HighIronRanch.Azure.ServiceBus
 			{
 				var options = new OnMessageOptions { };
 				var client = _queueClients[messageType];
-				if (typeof (ICommand).IsAssignableFrom(messageType))
+				if (typeof (IAggregateCommand).IsAssignableFrom(messageType))
 				{
 					Task.Run(() => StartSessionAsync(client, AcceptMessageSession, HandleMessage, options, _cancellationToken));
 				}
@@ -254,8 +254,8 @@ namespace HighIronRanch.Azure.ServiceBus
 				var handlerType = _queueHandlers[messageType];
 				var handler = _handlerActivator.GetInstance(handlerType);
 
-				var handleMethodInfo = handlerType.GetMethod("HandleAsync", new[] { messageType, typeof(IMessageActions) });
-				var task = (Task)handleMethodInfo.Invoke(handler, new[] { message, new MessageActions(messageToHandle) });
+				var handleMethodInfo = handlerType.GetMethod("HandleAsync", new[] { messageType, typeof(ICommandActions) });
+				var task = (Task)handleMethodInfo.Invoke(handler, new[] { message, new CommandActions(messageToHandle) });
 				task.Wait();
 
 				messageToHandle.Complete();

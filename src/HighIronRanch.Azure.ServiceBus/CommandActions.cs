@@ -4,11 +4,11 @@ using Microsoft.ServiceBus.Messaging;
 
 namespace HighIronRanch.Azure.ServiceBus
 {
-	internal class MessageActions : IMessageActions
+	internal class CommandActions : ICommandActions
 	{
 		private readonly BrokeredMessage _message;
 
-		public MessageActions(BrokeredMessage message)
+		public CommandActions(BrokeredMessage message)
 		{
 			_message = message;
 		}
