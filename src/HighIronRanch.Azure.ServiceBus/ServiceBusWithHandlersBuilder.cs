@@ -187,7 +187,7 @@ namespace HighIronRanch.Azure.ServiceBus
 
 				var eventTypesInAssemblies = assemblies
 					.SelectMany(assembly => assembly.GetTypes())
-					.Where(type => DoesTypeImplementGenericInterface(type, typeof (IEventHandler<>)));
+					.Where(type => type.DoesTypeImplementInterface(typeof(IEventHandler<>)));
 
 				await CreateHandledEventsAsync(eventTypesInAssemblies, bus);
 			}
@@ -201,21 +201,10 @@ namespace HighIronRanch.Azure.ServiceBus
 
 				var handlerTypesInAssemblies = assemblies
 					.SelectMany(assembly => assembly.GetTypes())
-					.Where(type => DoesTypeImplementGenericInterface(type, typeof (ICommandHandler<>)));
+					.Where(type => type.DoesTypeImplementInterface(typeof(ICommandHandler<>)));
 
 				await CreateHandledQueuesAsync(handlerTypesInAssemblies, bus);
 			}
-		}
-
-		private static bool DoesTypeImplementGenericInterface(Type type, Type @interface)
-		{
-			if (!type.DoesTypeImplementInterface(@interface))
-				return false;
-
-			if (type.GetInterfaces().Any(i => i.IsGenericType && i.GetGenericTypeDefinition() == @interface))
-				return true;
-
-			return false;
 		}
 
 		private async Task CreateQueuesAsync(IEnumerable<Type> commandTypes, ServiceBusWithHandlers bus)

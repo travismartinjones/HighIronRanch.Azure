@@ -3,20 +3,17 @@ using System.Linq;
 
 namespace HighIronRanch.Azure.ServiceBus
 {
-	internal static class TypeExtensions
+	public static class TypeExtensions
 	{
 		public static bool DoesTypeImplementInterface(this Type type, Type @interface)
 		{
 			if (type.IsAbstract || type.IsInterface)
 				return false;
 
-			// This doesn't work: typeof(IMessageHandler<>).IsAssignableFrom(typeof(TestMessageHandler))
-			//return @interface.IsAssignableFrom(type);
+			if (@interface.IsGenericType && type.GetInterfaces().Any(i => i.IsGenericType && i.GetGenericTypeDefinition() == @interface))
+				return true;
 
-			// But this does:
-			return type
-				.GetInterfaces()
-				.Any(x => x.IsGenericType && x.GetGenericTypeDefinition() == @interface);
+			return @interface.IsAssignableFrom(type);
 		}
 	}
 }
