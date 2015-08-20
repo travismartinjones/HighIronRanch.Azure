@@ -1,4 +1,5 @@
-﻿using System.Text.RegularExpressions;
+﻿using System;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.ServiceBus;
 using Microsoft.ServiceBus.Messaging;
@@ -8,6 +9,7 @@ namespace HighIronRanch.Azure.ServiceBus
 	public interface IServiceBusSettings
 	{
 		string AzureServiceBusConnectionString { get; }
+		string ServiceBusSubscriptionNamePrefix { get; }
 	}
 
 	public interface IServiceBus
@@ -41,6 +43,15 @@ namespace HighIronRanch.Azure.ServiceBus
 		{
 			// Entity segments can contain only letters, numbers, periods (.), hyphens (-), and underscores (_)
 			return Regex.Replace(name, @"[^a-zA-Z0-9\.\-_]", "_");
+		}
+
+		protected string CreateSubscriptionName(string name)
+		{
+			var subname = string.Format("{0}.{1}", _settings.ServiceBusSubscriptionNamePrefix, CleanseName(name));
+			if(subname.Length > 50)
+				throw new ArgumentException("Resulting subscription name '" + subname + "' is longer than 50 character limit", "name");
+
+			return subname;
 		}
 
 		public async Task CreateQueueAsync(string name, bool isSessionRequired)
@@ -98,10 +109,10 @@ namespace HighIronRanch.Azure.ServiceBus
 		public async Task<SubscriptionClient> CreateSubscriptionClientAsync(string topicName, string subscriptionName)
 		{
 			var cleansedTopicName = CleanseName(topicName);
-			var cleansedSubscriptionName = CleanseName(subscriptionName);
+			var cleansedSubscriptionName = CreateSubscriptionName(subscriptionName);
 			var sd = new SubscriptionDescription(cleansedTopicName, cleansedSubscriptionName);
 
-			if (!_manager.SubscriptionExists(cleansedTopicName, subscriptionName))
+			if (!_manager.SubscriptionExists(cleansedTopicName, cleansedSubscriptionName))
 				await _manager.CreateSubscriptionAsync(sd);
 
 			return SubscriptionClient.CreateFromConnectionString(_settings.AzureServiceBusConnectionString, cleansedTopicName, cleansedSubscriptionName);
@@ -110,7 +121,7 @@ namespace HighIronRanch.Azure.ServiceBus
 		public async Task DeleteSubscriptionAsync(string topicName, string subscriptionName)
 		{
 			var cleansedTopicName = CleanseName(topicName);
-			var cleansedSubscriptionName = CleanseName(subscriptionName);
+			var cleansedSubscriptionName = CreateSubscriptionName(subscriptionName);
 			await _manager.DeleteSubscriptionAsync(cleansedTopicName, cleansedSubscriptionName);
 		}
 	}

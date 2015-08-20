@@ -4,12 +4,13 @@ using System.Threading;
 using System.Threading.Tasks;
 using developwithpassion.specifications.rhinomocks;
 using HighIronRanch.Azure.ServiceBus.Contracts;
+using HighIronRanch.Azure.ServiceBus.Test.Common;
 using HighIronRanch.Core.Services;
 using Machine.Specifications;
 
 namespace HighIronRanch.Azure.ServiceBus.Test.Integration
 {
-	public class ServiceBusWithHandlersSpecs
+	public class ServiceBusWithHandlersQueueSpecs
 	{
 		public class TestCommand : ICommand
 		{
@@ -83,7 +84,7 @@ namespace HighIronRanch.Azure.ServiceBus.Test.Integration
 			};
 		}
 
-		public class When_sending_a_message : CleaningConcern
+		public class When_sending_a_command : CleaningConcern
 		{
 			private static string _testContent = Guid.NewGuid().ToString();
 
@@ -119,7 +120,7 @@ namespace HighIronRanch.Azure.ServiceBus.Test.Integration
 			private It should_be_handled = () => TestCommandHandler.LastHandledContent.ShouldEqual(_testContent);
 		}
 
-		public class When_sending_a_long_running_message : CleaningConcern
+		public class When_sending_a_long_running_command : CleaningConcern
 		{
 			private static string _context = "Long running test";
 			private static string _testContent = Guid.NewGuid().ToString();

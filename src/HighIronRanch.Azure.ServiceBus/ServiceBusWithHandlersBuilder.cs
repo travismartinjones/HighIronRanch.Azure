@@ -185,11 +185,11 @@ namespace HighIronRanch.Azure.ServiceBus
 			{
 				var assemblies = GetAssemblies(_eventHandlerAssembliesToScan);
 
-				var eventTypesInAssemblies = assemblies
+				var eventHandlerTypesInAssemblies = assemblies
 					.SelectMany(assembly => assembly.GetTypes())
 					.Where(type => type.DoesTypeImplementInterface(typeof(IEventHandler<>)));
 
-				await CreateHandledEventsAsync(eventTypesInAssemblies, bus);
+				await CreateHandledEventsAsync(eventHandlerTypesInAssemblies, bus);
 			}
 		}
 
@@ -231,9 +231,9 @@ namespace HighIronRanch.Azure.ServiceBus
 			}
 		}
 
-		private async Task CreateHandledEventsAsync(IEnumerable<Type> eventTypes, ServiceBusWithHandlers bus)
+		private async Task CreateHandledEventsAsync(IEnumerable<Type> eventHandlerTypes, ServiceBusWithHandlers bus)
 		{
-			foreach (var eventType in eventTypes)
+			foreach (var eventType in eventHandlerTypes)
 			{
 				await bus.CreateHandledEventAsync(eventType);
 			}

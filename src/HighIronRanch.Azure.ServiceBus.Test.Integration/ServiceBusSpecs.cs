@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using developwithpassion.specifications.rhinomocks;
+using HighIronRanch.Azure.ServiceBus.Test.Common;
 using Machine.Specifications;
 using Microsoft.ServiceBus.Messaging;
 

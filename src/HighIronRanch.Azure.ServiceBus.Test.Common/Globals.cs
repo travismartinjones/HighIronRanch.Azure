@@ -1,4 +1,4 @@
-namespace HighIronRanch.Azure.ServiceBus.Test.Integration
+namespace HighIronRanch.Azure.ServiceBus.Test.Common
 {
 	public static class Globals
 	{

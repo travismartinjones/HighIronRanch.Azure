@@ -36,11 +36,8 @@ namespace HighIronRanch.Azure.ServiceBus
 		// IEvent, TopicClient
 		protected readonly IDictionary<Type, TopicClient> _topicClients = new Dictionary<Type, TopicClient>();
  
-		// IEvent, IEventHandler
-		protected readonly IDictionary<Type, Type> _eventHandlers = new Dictionary<Type, Type>();
-
-		// IEventHandler, IEvent
-		protected readonly IDictionary<Type, Type> _subscriptions = new Dictionary<Type, Type>(); 
+		// IEvent, ISet<IEventHandler>
+		protected readonly IDictionary<Type, ISet<Type>> _eventHandlers = new Dictionary<Type, ISet<Type>>(); 
 
 		public ServiceBusWithHandlers(IServiceBus serviceBus, IHandlerActivator handlerActivator, ILogger logger)
 		{
@@ -64,10 +61,10 @@ namespace HighIronRanch.Azure.ServiceBus
 			if (!disposing)
 			{
 				// Unsubscribe
-				foreach (var eventHandler in _subscriptions.Keys)
+				foreach (var eventType in _eventHandlers.Keys)
 				{
-					_logger.Information(LoggerContext, "Unsubscribing {0} {1}", _subscriptions[eventHandler].FullName, eventHandler.FullName);
-					_serviceBus.DeleteSubscriptionAsync(_subscriptions[eventHandler].FullName, eventHandler.FullName);
+					_logger.Information(LoggerContext, "Unsubscribing {0}", eventType.FullName);
+					_serviceBus.DeleteSubscriptionAsync(eventType.FullName, eventType.Name);
 				}
 
 /*
@@ -151,7 +148,7 @@ namespace HighIronRanch.Azure.ServiceBus
 
 		internal async Task CreateHandledEventAsync(Type handlerType)
 		{
-			if (_eventHandlers.ContainsKey(handlerType))
+			if (_eventHandlers.Values.Any(v => v.Contains(handlerType)))
 				return;
 
 			var interfaces = handlerType.GetInterfaces().Where(i => i.IsGenericType);
@@ -160,7 +157,14 @@ namespace HighIronRanch.Azure.ServiceBus
 			foreach (var eventType in eventTypes)
 			{
 				await CreateTopicAsync(eventType);
-				_eventHandlers.Add(eventType, handlerType);
+				if (_eventHandlers.ContainsKey(eventType))
+				{
+					_eventHandlers[eventType].Add(handlerType);
+				}
+				else
+				{
+					_eventHandlers.Add(eventType, new HashSet<Type>() {handlerType});
+				}
 			}
 		}
 
@@ -199,8 +203,7 @@ namespace HighIronRanch.Azure.ServiceBus
 			{
 				var options = new OnMessageOptions { };
 				options.MaxConcurrentCalls = 10;
-				var client = await _serviceBus.CreateSubscriptionClientAsync(eventType.FullName, _eventHandlers[eventType].FullName);
-				_subscriptions.Add(_eventHandlers[eventType], eventType);
+				var client = await _serviceBus.CreateSubscriptionClientAsync(eventType.FullName, eventType.Name);
 				client.OnMessageAsync(HandleEvent, options);
 			}
 		}
@@ -219,12 +222,13 @@ namespace HighIronRanch.Azure.ServiceBus
 						.MakeGenericMethod(eventType)
 						.Invoke(eventToHandle,  new object[] {});
 
-				var handlerType = _eventHandlers[eventType];
-				var handler = _handlerActivator.GetInstance(handlerType);
-
-				var handleMethodInfo = handlerType.GetMethod("HandleAsync", new [] {eventType});
-
-				handleMethodInfo.Invoke(handler, new [] {message});
+				var handlerTypes = _eventHandlers[eventType];
+				foreach (var handlerType in handlerTypes)
+				{
+					var handler = _handlerActivator.GetInstance(handlerType);
+					var handleMethodInfo = handlerType.GetMethod("HandleAsync", new[] { eventType });
+					handleMethodInfo.Invoke(handler, new[] { message });
+				}
 
 				eventToHandle.Complete();
 			}

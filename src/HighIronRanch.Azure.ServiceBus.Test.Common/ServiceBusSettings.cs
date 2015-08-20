@@ -1,11 +1,12 @@
 using System;
 using System.IO;
 
-namespace HighIronRanch.Azure.ServiceBus.Test.Integration
+namespace HighIronRanch.Azure.ServiceBus.Test.Common
 {
 	public class ServiceBusSettings : IServiceBusSettings
 	{
 		public string AzureServiceBusConnectionString { get; set; }
+		public string ServiceBusSubscriptionNamePrefix { get; set; }
 
 		public static ServiceBusSettings Create()
 		{
@@ -22,7 +23,8 @@ namespace HighIronRanch.Azure.ServiceBus.Test.Integration
 
 			var settings = new ServiceBusSettings()
 			{
-				AzureServiceBusConnectionString = settingsLines[0]
+				AzureServiceBusConnectionString = settingsLines[0],
+				ServiceBusSubscriptionNamePrefix = "TestPrefix"
 			};
 
 			return settings;
