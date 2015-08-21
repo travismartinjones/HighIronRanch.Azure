@@ -92,25 +92,25 @@ namespace HighIronRanch.Azure.ServiceBus
 			return this;
 		}
 
-		public ServiceBusWithHandlersBuilder WithMessagesInAssembiles(IEnumerable<string> assembliesToScan)
+		public ServiceBusWithHandlersBuilder WithCommandsInAssembiles(IEnumerable<string> assembliesToScan)
 		{
 			_messageAssembliesToScan = assembliesToScan;
 			return this;
 		}
 
-		public ServiceBusWithHandlersBuilder WithMessages(IEnumerable<Type> commandTypes)
+		public ServiceBusWithHandlersBuilder WithCommands(IEnumerable<Type> commandTypes)
 		{
 			_messageTypes = commandTypes;
 			return this;
 		}
 
-		public ServiceBusWithHandlersBuilder WithMessageHandlersInAssemblies(IEnumerable<string> assembliesToScan)
+		public ServiceBusWithHandlersBuilder WithCommandHandlersInAssemblies(IEnumerable<string> assembliesToScan)
 		{
 			_messageHandlerAssembliesToScan = assembliesToScan;
 			return this;
 		}
 
-		public ServiceBusWithHandlersBuilder WithMessageHandlers(IEnumerable<Type> handlerTypes)
+		public ServiceBusWithHandlersBuilder WithCommandHandlers(IEnumerable<Type> handlerTypes)
 		{
 			_messageHandlerTypes = handlerTypes;
 			return this;

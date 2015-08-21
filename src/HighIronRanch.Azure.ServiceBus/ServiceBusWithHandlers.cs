@@ -28,10 +28,10 @@ namespace HighIronRanch.Azure.ServiceBus
 		private readonly ILogger _logger;
 		protected CancellationToken _cancellationToken = new CancellationToken();
 
-		// IMessage, QueueClient
+		// ICommand, QueueClient
 		protected readonly IDictionary<Type, QueueClient> _queueClients = new Dictionary<Type, QueueClient>();
-		
-		// IMessage, IMessageHandler/IMessageLongHandler
+
+		// ICommand, ICommandHandler
 		protected readonly IDictionary<Type, Type> _queueHandlers = new Dictionary<Type, Type>();
 
 		// IEvent, TopicClient

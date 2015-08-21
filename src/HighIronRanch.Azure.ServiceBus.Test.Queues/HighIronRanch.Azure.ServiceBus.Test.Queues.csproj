@@ -4,11 +4,11 @@
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProjectGuid>{5572B92D-8BC6-41A5-9422-73135B8413BD}</ProjectGuid>
+    <ProjectGuid>{9BE5F83F-E63B-4D20-B55A-4ED2BE0B90BA}</ProjectGuid>
     <OutputType>Exe</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>HighIronRanch.Azure.ServiceBus.Test.Topics</RootNamespace>
-    <AssemblyName>HighIronRanch.Azure.ServiceBus.Test.Topics</AssemblyName>
+    <RootNamespace>HighIronRanch.Azure.ServiceBus.Test.Queues</RootNamespace>
+    <AssemblyName>HighIronRanch.Azure.ServiceBus.Test.Queues</AssemblyName>
     <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
   </PropertyGroup>
@@ -21,7 +21,6 @@
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
-    <NoWarn>1998</NoWarn>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <PlatformTarget>AnyCPU</PlatformTarget>

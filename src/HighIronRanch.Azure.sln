@@ -15,6 +15,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HighIronRanch.Azure.Service
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HighIronRanch.Azure.ServiceBus.Test.Common", "HighIronRanch.Azure.ServiceBus.Test.Common\HighIronRanch.Azure.ServiceBus.Test.Common.csproj", "{A500165C-BAAF-4EC1-9174-F9FE0420A328}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HighIronRanch.Azure.ServiceBus.Test.Queues", "HighIronRanch.Azure.ServiceBus.Test.Queues\HighIronRanch.Azure.ServiceBus.Test.Queues.csproj", "{9BE5F83F-E63B-4D20-B55A-4ED2BE0B90BA}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -45,6 +47,10 @@ Global
 		{A500165C-BAAF-4EC1-9174-F9FE0420A328}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A500165C-BAAF-4EC1-9174-F9FE0420A328}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A500165C-BAAF-4EC1-9174-F9FE0420A328}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9BE5F83F-E63B-4D20-B55A-4ED2BE0B90BA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9BE5F83F-E63B-4D20-B55A-4ED2BE0B90BA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9BE5F83F-E63B-4D20-B55A-4ED2BE0B90BA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9BE5F83F-E63B-4D20-B55A-4ED2BE0B90BA}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

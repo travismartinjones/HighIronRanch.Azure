@@ -98,7 +98,7 @@ namespace HighIronRanch.Azure.ServiceBus.Test.Integration
 					var busBuilder = new ServiceBusWithHandlersBuilder(_serviceBus, activator, logger);
 
 					busBuilder.CreateServiceBus()
-						.WithMessageHandlers(new List<Type>() {typeof (TestCommandHandler)});
+						.WithCommandHandlers(new List<Type>() {typeof (TestCommandHandler)});
 					var task = busBuilder.BuildAsync();
 					task.Wait();
 					var bus = task.Result;
@@ -136,7 +136,7 @@ namespace HighIronRanch.Azure.ServiceBus.Test.Integration
 					var busBuilder = new ServiceBusWithHandlersBuilder(_serviceBus, activator, _logger);
 
 					busBuilder.CreateServiceBus()
-						.WithMessageHandlers(new List<Type>() { typeof(TestCommandLongHandler) });
+						.WithCommandHandlers(new List<Type>() { typeof(TestCommandLongHandler) });
 					var task = busBuilder.BuildAsync();
 					task.Wait();
 					return task.Result;
