@@ -245,7 +245,9 @@ namespace HighIronRanch.Azure.ServiceBus
 				else
 				{
 					options.MaxConcurrentCalls = 10;
-					client.OnMessageAsync(HandleMessage, options);
+#pragma warning disable 4014
+					Task.Run(() => client.OnMessageAsync(HandleMessage, options));
+#pragma warning restore 4014
 				}
 			}
 
