@@ -22,6 +22,7 @@ namespace HighIronRanch.Azure.ServiceBus
 		public static readonly string LoggerContext = "HighIronRanch.Azure.ServiceBus";
 
 		private readonly IServiceBus _serviceBus;
+		private bool _hasMultipleDeployments = true;
 		private bool _useJsonSerialization = true;
 		private readonly IHandlerActivator _handlerActivator;
 		private readonly ILogger _logger;
@@ -81,9 +82,34 @@ namespace HighIronRanch.Azure.ServiceBus
 			}
 		}
 
+		/// <summary>
+		/// When true, messages are serialized as json which is humanly readable in 
+		/// Service Bus Explorer. Otherwise, messages are serialized with Azure
+		/// Service Bus' default method which is not humanly readable.
+		/// Json serialization is required when using multiple deployments.
+		/// Default is true.
+		/// </summary>
 		public void UseJsonMessageSerialization(bool useJsonSerialization)
 		{
+			if (!useJsonSerialization && _hasMultipleDeployments)
+				throw new ArgumentException("Json serialization is required when using multiple deployments.");
+
 			_useJsonSerialization = useJsonSerialization;
+		}
+
+		/// <summary>
+		/// When true, tells ServiceBus to only execute EventHandlers once across multiple 
+		/// deployments such as a webfarm. Otherwise, event handling a bit simpler in a
+		/// standalone deployment where redundancy is not important. Json serialization 
+		/// is required when using multiple deployments.
+		/// Default is true.
+		/// </summary>
+		public void HasMultipleDeployments(bool hasMultipleDeployments)
+		{
+			if (hasMultipleDeployments && !_useJsonSerialization)
+				throw new ArgumentException("Json serialization is required when using multiple deployments.");
+
+			_hasMultipleDeployments = hasMultipleDeployments;
 		}
 
 		internal async Task CreateQueueAsync(Type type)
@@ -120,10 +146,18 @@ namespace HighIronRanch.Azure.ServiceBus
 			var isCommand = command is IAggregateCommand;
 			var client = _queueClients[command.GetType()];
 
-			var brokeredMessage = 
-				_useJsonSerialization ?
-				new BrokeredMessage(JsonConvert.SerializeObject(command)) :
-				new BrokeredMessage(command);
+			BrokeredMessage brokeredMessage;
+
+			if (_useJsonSerialization)
+			{
+				var message = JsonConvert.SerializeObject(command);
+				brokeredMessage = new BrokeredMessage(message);
+				brokeredMessage.MessageId = message.GetHashCode().ToString();
+			}
+			else
+			{
+				brokeredMessage = new BrokeredMessage(command);
+			}
 
 			brokeredMessage.ContentType = command.GetType().AssemblyQualifiedName;
 			if (isCommand)
@@ -144,6 +178,12 @@ namespace HighIronRanch.Azure.ServiceBus
 			var client = await _serviceBus.CreateTopicClientAsync(type.FullName);
 
 			_topicClients.Add(type, client);
+
+			// Create queues for the events in a multiple deployment environment
+			if (_hasMultipleDeployments)
+			{
+				await CreateQueueAsync(type);
+			}
 		}
 
 		internal async Task CreateHandledEventAsync(Type handlerType)
@@ -172,10 +212,18 @@ namespace HighIronRanch.Azure.ServiceBus
 		{
 			var client = _topicClients[evt.GetType()];
 
-			var brokeredMessage = 
-				_useJsonSerialization ?
-				new BrokeredMessage(JsonConvert.SerializeObject(evt)) :
-				new BrokeredMessage(evt);
+			BrokeredMessage brokeredMessage;
+
+			if (_useJsonSerialization)
+			{
+				var message = JsonConvert.SerializeObject(evt);
+				brokeredMessage = new BrokeredMessage(message);
+				brokeredMessage.MessageId = message.GetHashCode().ToString();
+			}
+			else
+			{
+				brokeredMessage = new BrokeredMessage(evt);
+			}
 
 			brokeredMessage.ContentType = evt.GetType().AssemblyQualifiedName;
 
@@ -190,7 +238,9 @@ namespace HighIronRanch.Azure.ServiceBus
 				var client = _queueClients[messageType];
 				if (typeof (IAggregateCommand).IsAssignableFrom(messageType))
 				{
+#pragma warning disable 4014
 					Task.Run(() => StartSessionAsync(client, AcceptMessageSession, HandleMessage, options, _cancellationToken));
+#pragma warning restore 4014
 				}
 				else
 				{
@@ -203,9 +253,49 @@ namespace HighIronRanch.Azure.ServiceBus
 			{
 				var options = new OnMessageOptions { };
 				options.MaxConcurrentCalls = 10;
+
 				var client = await _serviceBus.CreateSubscriptionClientAsync(eventType.FullName, eventType.Name);
-				client.OnMessageAsync(HandleEvent, options);
+
+				if (_hasMultipleDeployments)
+				{
+					client.OnMessageAsync(HandleEventForMultipleDeployments, options);
+
+					var qclient = _queueClients[eventType];
+					qclient.OnMessageAsync(HandleMessage, options);
+				}
+				else
+				{
+					client.OnMessageAsync(HandleEvent, options);
+				}
 			}
+		}
+
+		private Task HandleEventForMultipleDeployments(BrokeredMessage eventToHandle)
+		{
+			try
+			{
+				var eventType = Type.GetType(eventToHandle.ContentType);
+				// Should be using json serialization
+				var theEvent = JsonConvert.DeserializeObject(eventToHandle.GetBody<string>(), eventType);
+
+				var client = _queueClients[eventType];
+
+				var message = JsonConvert.SerializeObject(theEvent);
+				var brokeredMessage = new BrokeredMessage(message)
+				{
+					MessageId = message.GetHashCode().ToString(),
+					ContentType = eventToHandle.ContentType
+				};
+
+				client.Send(brokeredMessage);
+			}
+			catch (Exception ex)
+			{
+				Console.WriteLine(" Abandoning {0}: {1}", eventToHandle.MessageId, ex.Message);
+				eventToHandle.Abandon();
+			}
+
+			return Task.FromResult(0);
 		}
 
 		private Task HandleEvent(BrokeredMessage eventToHandle)
@@ -214,13 +304,18 @@ namespace HighIronRanch.Azure.ServiceBus
 			{
 				var eventType = Type.GetType(eventToHandle.ContentType);
 
-				var message =
-					_useJsonSerialization ?
-					JsonConvert.DeserializeObject(eventToHandle.GetBody<string>(), eventType) :
-					eventToHandle.GetType()
-						.GetMethod("GetBody", new Type[] {})
-						.MakeGenericMethod(eventType)
-						.Invoke(eventToHandle,  new object[] {});
+				object message;
+				if (_useJsonSerialization)
+				{
+					message = JsonConvert.DeserializeObject(eventToHandle.GetBody<string>(), eventType);
+				}
+				else
+				{
+					message = eventToHandle.GetType()
+								.GetMethod("GetBody", new Type[] { })
+								.MakeGenericMethod(eventType)
+								.Invoke(eventToHandle, new object[] { });
+				}
 
 				var handlerTypes = _eventHandlers[eventType];
 				foreach (var handlerType in handlerTypes)
@@ -247,20 +342,38 @@ namespace HighIronRanch.Azure.ServiceBus
 			{
 				var messageType = Type.GetType(messageToHandle.ContentType);
 
-				var message =
-					_useJsonSerialization
-						? JsonConvert.DeserializeObject(messageToHandle.GetBody<string>(), messageType)
-						: messageToHandle.GetType()
-							.GetMethod("GetBody", new Type[] {})
-							.MakeGenericMethod(messageType)
-							.Invoke(messageToHandle, new object[] {});
+				object message;
+				if (_useJsonSerialization)
+				{
+					message = JsonConvert.DeserializeObject(messageToHandle.GetBody<string>(), messageType);
+				}
+				else
+				{
+					message = messageToHandle.GetType()
+								.GetMethod("GetBody", new Type[] {})
+								.MakeGenericMethod(messageType)
+								.Invoke(messageToHandle, new object[] {});
+				}
 
-				var handlerType = _queueHandlers[messageType];
-				var handler = _handlerActivator.GetInstance(handlerType);
+				if (messageType.DoesTypeImplementInterface(typeof(IEvent)))
+				{
+					var handlerTypes = _eventHandlers[messageType];
+					foreach (var handlerType in handlerTypes)
+					{
+						var handler = _handlerActivator.GetInstance(handlerType);
+						var handleMethodInfo = handlerType.GetMethod("HandleAsync", new[] { messageType });
+						handleMethodInfo.Invoke(handler, new[] { message });
+					}
+				}
+				else
+				{
+					var handlerType = _queueHandlers[messageType];
+					var handler = _handlerActivator.GetInstance(handlerType);
 
-				var handleMethodInfo = handlerType.GetMethod("HandleAsync", new[] { messageType, typeof(ICommandActions) });
-				var task = (Task)handleMethodInfo.Invoke(handler, new[] { message, new CommandActions(messageToHandle) });
-				task.Wait();
+					var handleMethodInfo = handlerType.GetMethod("HandleAsync", new[] { messageType, typeof(ICommandActions) });
+					var task = (Task)handleMethodInfo.Invoke(handler, new[] { message, new CommandActions(messageToHandle) });
+					task.Wait();
+				}
 
 				messageToHandle.Complete();
 			}

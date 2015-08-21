@@ -33,8 +33,6 @@ namespace HighIronRanch.Azure.ServiceBus.Test.Topics
 			task.Wait();
 			var bus = task.Result;
 
-			var testContent = Guid.NewGuid().ToString();
-
 			Logger.Information("Main", "Ready. Press 'p' to publish an event. Press 'q' to quit.");
 
 			while (true)
@@ -44,6 +42,8 @@ namespace HighIronRanch.Azure.ServiceBus.Test.Topics
 					break;
 				if (key.KeyChar == 'p')
 				{
+					var testContent = Guid.NewGuid().ToString();
+
 					Logger.Information("Main", "Publishing event for {0}", testContent);
 					bus.PublishAsync(new TestEvent() { Content = testContent });
 					Logger.Information("Main", "Published");
@@ -54,6 +54,8 @@ namespace HighIronRanch.Azure.ServiceBus.Test.Topics
 
 			Logger.Information("Main", "Cleanup");
 			var cleanupTask = serviceBus.DeleteTopicAsync(typeof(TestEvent).FullName);
+			cleanupTask.Wait();
+			cleanupTask = serviceBus.DeleteQueueAsync(typeof(TestEvent).FullName);
 			cleanupTask.Wait();
 		}
 	}

@@ -74,6 +74,8 @@ namespace HighIronRanch.Azure.ServiceBus.Test.Integration
 			{
 				var task = _serviceBus.DeleteTopicAsync(typeof(TestEvent).FullName);
 				task.Wait();
+				task = _serviceBus.DeleteQueueAsync(typeof(TestEvent).FullName);
+				task.Wait();
 				//sut.Dispose();
 			};
 		}

@@ -26,6 +26,9 @@ namespace HighIronRanch.Azure.ServiceBus
 		private IEnumerable<string> _eventHandlerAssembliesToScan;
 		private IEnumerable<Type> _eventHandlerTypes;
 
+		private bool _hasMultipleDeployments = true;
+		private bool _useJsonSerialization = true;
+
 		public ServiceBusWithHandlersBuilder(IServiceBus serviceBus, IHandlerActivator handlerActivator, ILogger logger)
 		{
 			_serviceBus = serviceBus;
@@ -35,6 +38,57 @@ namespace HighIronRanch.Azure.ServiceBus
 
 		public ServiceBusWithHandlersBuilder CreateServiceBus()
 		{
+			return this;
+		}
+
+		/// <summary>
+		/// Default setting.
+		/// Tells ServiceBus to only execute EventHandlers once across multiple deployments
+		/// such as a webfarm. Json serialization is required when using multiple deployments.
+		/// </summary>
+		public ServiceBusWithHandlersBuilder WithMultipleDeployments()
+		{
+			if(!_useJsonSerialization)
+				throw new ArgumentException("Json serialization is required when using multiple deployments.");
+
+			_hasMultipleDeployments = true;
+			return this;
+		}
+
+		/// <summary>
+		/// Tells ServiceBus this application will be deployed in a standalone environment
+		/// with no concern for redundancy. This simplifies the internals of EventHandling 
+		/// a little bit. Json serialization is required when using multiple deployments.
+		/// </summary>
+		/// <returns></returns>
+		public ServiceBusWithHandlersBuilder WithSingleDeployment()
+		{
+			_hasMultipleDeployments = false;
+			return this;
+		}
+
+		/// <summary>
+		/// Default setting.
+		/// Serialize messages into json which is humanly readable in Service Bus Explorer. 
+		/// Json serialization is required when using multiple deployments.
+		/// </summary>
+		public ServiceBusWithHandlersBuilder WithJsonSerialization()
+		{
+			_useJsonSerialization = true;
+			return this;
+		}
+
+		/// <summary>
+		/// Use the Azure Service Bus default object serialization for messages which are 
+		/// not humanly readable in Service Bus Explorer. Json serialization is required 
+		/// when using multiple deployments.
+		/// </summary>
+		public ServiceBusWithHandlersBuilder WithDefaultSerialization()
+		{
+			if (_hasMultipleDeployments)
+				throw new ArgumentException("Json serialization is required when using multiple deployments.");
+
+			_useJsonSerialization = false;
 			return this;
 		}
 
@@ -89,6 +143,11 @@ namespace HighIronRanch.Azure.ServiceBus
 		public async Task<ServiceBusWithHandlers> BuildAsync()
 		{
 			var bus = new ServiceBusWithHandlers(_serviceBus, _handlerActivator, _logger);
+
+			// set multiple deployments first because json serialization is true in ServiceBus by default
+			// this will prevent any exception
+			bus.HasMultipleDeployments(_hasMultipleDeployments);
+			bus.UseJsonMessageSerialization(_useJsonSerialization);
 
 			await CreateHandledQueuesInAssembliesAsync(bus);
 

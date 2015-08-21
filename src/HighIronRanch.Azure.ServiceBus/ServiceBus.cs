@@ -45,9 +45,21 @@ namespace HighIronRanch.Azure.ServiceBus
 			return Regex.Replace(name, @"[^a-zA-Z0-9\.\-_]", "_");
 		}
 
+		protected string CreateQueueName(string name)
+		{
+			var queueName = string.Format("q.{0}", CleanseName(name));
+			return queueName;
+		}
+
+		protected string CreateTopicName(string name)
+		{
+			var topicName = string.Format("t.{0}", CleanseName(name));
+			return topicName;
+		}
+
 		protected string CreateSubscriptionName(string name)
 		{
-			var subname = string.Format("{0}.{1}", _settings.ServiceBusSubscriptionNamePrefix, CleanseName(name));
+			var subname = string.Format("s.{0}.{1}", _settings.ServiceBusSubscriptionNamePrefix, CleanseName(name));
 			if(subname.Length > 50)
 				throw new ArgumentException("Resulting subscription name '" + subname + "' is longer than 50 character limit", "name");
 
@@ -56,8 +68,8 @@ namespace HighIronRanch.Azure.ServiceBus
 
 		public async Task CreateQueueAsync(string name, bool isSessionRequired)
 		{
-			var cleansedName = CleanseName(name);
-			await CreateCleansedNameQueueAsync(cleansedName, isSessionRequired);
+			var queueName = CreateQueueName(name);
+			await CreateCleansedNameQueueAsync(queueName, isSessionRequired);
 		}
 
 		private async Task CreateCleansedNameQueueAsync(string cleansedName, bool isSessionRequired)
@@ -65,6 +77,7 @@ namespace HighIronRanch.Azure.ServiceBus
 			var qd = new QueueDescription(cleansedName);
 			qd.RequiresSession = isSessionRequired;
 			qd.EnableDeadLetteringOnMessageExpiration = true;
+			qd.RequiresDuplicateDetection = true;
 
 			if (!_manager.QueueExists(cleansedName))
 				await _manager.CreateQueueAsync(qd);
@@ -77,38 +90,38 @@ namespace HighIronRanch.Azure.ServiceBus
 
 		public async Task<QueueClient> CreateQueueClientAsync(string name, bool isSessionRequired)
 		{
-			var cleansedName = CleanseName(name);
-			await CreateCleansedNameQueueAsync(cleansedName, isSessionRequired);
+			var queueName = CreateQueueName(name);
+			await CreateCleansedNameQueueAsync(queueName, isSessionRequired);
 
-			return QueueClient.CreateFromConnectionString(_settings.AzureServiceBusConnectionString, cleansedName);
+			return QueueClient.CreateFromConnectionString(_settings.AzureServiceBusConnectionString, queueName);
 		}
 
 		public async Task DeleteQueueAsync(string name)
 		{
-			var cleansedName = CleanseName(name);
+			var cleansedName = CreateQueueName(name);
 			await _manager.DeleteQueueAsync(cleansedName);
 		}
 
 		public async Task<TopicClient> CreateTopicClientAsync(string name)
 		{
-			var cleansedName = CleanseName(name);
-			var td = new TopicDescription(cleansedName);
+			var topicName = CreateTopicName(name);
+			var td = new TopicDescription(topicName);
 
-			if (!_manager.TopicExists(cleansedName))
+			if (!_manager.TopicExists(topicName))
 				await _manager.CreateTopicAsync(td);
 
-			return TopicClient.CreateFromConnectionString(_settings.AzureServiceBusConnectionString, cleansedName);
+			return TopicClient.CreateFromConnectionString(_settings.AzureServiceBusConnectionString, topicName);
 		}
 
 		public async Task DeleteTopicAsync(string name)
 		{
-			var cleansedName = CleanseName(name);
-			await _manager.DeleteTopicAsync(cleansedName);
+			var topicName = CreateTopicName(name);
+			await _manager.DeleteTopicAsync(topicName);
 		}
 
 		public async Task<SubscriptionClient> CreateSubscriptionClientAsync(string topicName, string subscriptionName)
 		{
-			var cleansedTopicName = CleanseName(topicName);
+			var cleansedTopicName = CreateTopicName(topicName);
 			var cleansedSubscriptionName = CreateSubscriptionName(subscriptionName);
 			var sd = new SubscriptionDescription(cleansedTopicName, cleansedSubscriptionName);
 
@@ -120,7 +133,7 @@ namespace HighIronRanch.Azure.ServiceBus
 
 		public async Task DeleteSubscriptionAsync(string topicName, string subscriptionName)
 		{
-			var cleansedTopicName = CleanseName(topicName);
+			var cleansedTopicName = CreateTopicName(topicName);
 			var cleansedSubscriptionName = CreateSubscriptionName(subscriptionName);
 			await _manager.DeleteSubscriptionAsync(cleansedTopicName, cleansedSubscriptionName);
 		}

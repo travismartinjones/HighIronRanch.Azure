@@ -86,7 +86,7 @@ namespace HighIronRanch.Azure.ServiceBus.Test.Integration
 
 		public class When_sending_a_command : CleaningConcern
 		{
-			private static string _testContent = Guid.NewGuid().ToString();
+			private static string _testContent = "Howdy"; // Guid.NewGuid().ToString();
 
 			private Establish context = () =>
 			{
@@ -101,7 +101,8 @@ namespace HighIronRanch.Azure.ServiceBus.Test.Integration
 						.WithMessageHandlers(new List<Type>() {typeof (TestCommandHandler)});
 					var task = busBuilder.BuildAsync();
 					task.Wait();
-					return task.Result;
+					var bus = task.Result;
+					return bus;
 				});
 			};
 
