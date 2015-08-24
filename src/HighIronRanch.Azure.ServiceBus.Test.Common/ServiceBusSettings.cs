@@ -7,6 +7,7 @@ namespace HighIronRanch.Azure.ServiceBus.Test.Common
 	{
 		public string AzureServiceBusConnectionString { get; set; }
 		public string ServiceBusSubscriptionNamePrefix { get; set; }
+		public string ServiceBusMasterPrefix { get; set; }
 
 		public static ServiceBusSettings Create()
 		{

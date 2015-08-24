@@ -10,6 +10,7 @@ namespace HighIronRanch.Azure.ServiceBus
 	{
 		string AzureServiceBusConnectionString { get; }
 		string ServiceBusSubscriptionNamePrefix { get; }
+		string ServiceBusMasterPrefix { get; }
 	}
 
 	public interface IServiceBus
@@ -45,21 +46,28 @@ namespace HighIronRanch.Azure.ServiceBus
 			return Regex.Replace(name, @"[^a-zA-Z0-9\.\-_]", "_");
 		}
 
+		protected string CreatePrefix()
+		{
+			if (string.IsNullOrEmpty(_settings.ServiceBusMasterPrefix))
+				return "";
+			return _settings.ServiceBusMasterPrefix + ".";
+		}
+
 		protected string CreateQueueName(string name)
 		{
-			var queueName = string.Format("q.{0}", CleanseName(name));
+			var queueName = string.Format("q.{0}{1}", CreatePrefix(), CleanseName(name));
 			return queueName;
 		}
 
 		protected string CreateTopicName(string name)
 		{
-			var topicName = string.Format("t.{0}", CleanseName(name));
+			var topicName = string.Format("t.{0}{1}", CreatePrefix(), CleanseName(name));
 			return topicName;
 		}
 
 		protected string CreateSubscriptionName(string name)
 		{
-			var subname = string.Format("s.{0}.{1}", _settings.ServiceBusSubscriptionNamePrefix, CleanseName(name));
+			var subname = string.Format("s.{0}{1}.{2}", CreatePrefix(), _settings.ServiceBusSubscriptionNamePrefix, CleanseName(name));
 			if(subname.Length > 50)
 				throw new ArgumentException("Resulting subscription name '" + subname + "' is longer than 50 character limit", "name");
 
