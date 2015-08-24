@@ -67,7 +67,12 @@ namespace HighIronRanch.Azure.ServiceBus
 
 		protected string CreateSubscriptionName(string name)
 		{
-			var subname = string.Format("s.{0}{1}.{2}", CreatePrefix(), _settings.ServiceBusSubscriptionNamePrefix, CleanseName(name));
+			// Use the hashcode to shorten the name and still have a good guarantee of uniqueness
+			var subname = string.Format("s.{0}{1}.{2}", 
+				CreatePrefix(),
+				_settings.ServiceBusSubscriptionNamePrefix, 
+				CleanseName(name).GetHashCode());
+
 			if(subname.Length > 50)
 				throw new ArgumentException("Resulting subscription name '" + subname + "' is longer than 50 character limit", "name");
 
