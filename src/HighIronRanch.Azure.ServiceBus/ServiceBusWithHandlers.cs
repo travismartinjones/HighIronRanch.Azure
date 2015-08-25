@@ -162,7 +162,7 @@ namespace HighIronRanch.Azure.ServiceBus
 			brokeredMessage.ContentType = command.GetType().AssemblyQualifiedName;
 			if (isCommand)
 			{
-				brokeredMessage.SessionId = ((IAggregateCommand) command).GetAggregateId().ToString();
+				brokeredMessage.SessionId = ((IAggregateCommand) command).GetAggregateId();
 			}
 
 			await client.SendAsync(brokeredMessage);
