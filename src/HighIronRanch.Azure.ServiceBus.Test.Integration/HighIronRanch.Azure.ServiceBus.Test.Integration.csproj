@@ -38,9 +38,9 @@
     <Reference Include="developwithpassion.specifications.rhinomocks">
       <HintPath>..\packages\developwithpassion.specifications.rhinomocks.0.6.0\lib\developwithpassion.specifications.rhinomocks.dll</HintPath>
     </Reference>
-    <Reference Include="HighIronRanch.Core, Version=1.0.7.2, Culture=neutral, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\packages\HighIronRanch.Core.1.0.7.2\lib\net45\HighIronRanch.Core.dll</HintPath>
+    <Reference Include="HighIronRanch.Core, Version=1.0.7.5, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\HighIronRanch.Core.1.0.7.5\lib\net45\HighIronRanch.Core.dll</HintPath>
+      <Private>True</Private>
     </Reference>
     <Reference Include="Machine.Fakes">
       <HintPath>..\packages\Machine.Fakes.2.6.0\lib\net40\Machine.Fakes.dll</HintPath>

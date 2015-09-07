@@ -53,6 +53,19 @@ namespace HighIronRanch.Azure.DocumentDb
             await client.DeleteDocumentAsync(documentLink);
         }
 
+        public void Insert<T>(T item) where T : IViewModel
+        {
+            var task = InsertAsync(item);
+            task.Wait();
+        }
+
+        public async Task InsertAsync<T>(T item) where T : IViewModel
+        {
+            var collectionLink = await GetCollectionLinkAsync<T>();
+            var client = await _clientFactory.GetClientAsync(_settings);
+            await InsertAsync(client, collectionLink, item);
+        }
+
         public void Insert<T>(IEnumerable<T> items) where T : IViewModel
         {
             var task = InsertAsync(items);

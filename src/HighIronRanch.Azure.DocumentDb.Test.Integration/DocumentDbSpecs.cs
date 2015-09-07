@@ -61,7 +61,8 @@ namespace HighIronRanch.Azure.DocumentDb.Test.Integration
 
             private Because of = () =>
             {
-                sut.Insert(new List<TestDocument>() { _testDocument });
+                var list = new List<TestDocument> {_testDocument};
+                sut.Insert<TestDocument>(list);
                 _results = sut.Get<TestDocument>().ToList();
             };
 
@@ -75,7 +76,8 @@ namespace HighIronRanch.Azure.DocumentDb.Test.Integration
 
             private Because of = () =>
             {
-                sut.Insert(new List<TestDocument>() { _testDocument });
+                var list = new List<TestDocument> { _testDocument };
+                sut.Insert<TestDocument>(list);
                 _testDocument.Payload++;
                 sut.Save(_testDocument);
                 _results = sut.Get<TestDocument>().ToList();
@@ -92,7 +94,8 @@ namespace HighIronRanch.Azure.DocumentDb.Test.Integration
 
             private Because of = () =>
             {
-                sut.Insert(new List<TestDocument>() { _testDocument });
+                var list = new List<TestDocument> { _testDocument };
+                sut.Insert<TestDocument>(list);
                 sut.Delete(_testDocument);
                 _results = sut.Get<TestDocument>().ToList();
             };
@@ -116,7 +119,8 @@ namespace HighIronRanch.Azure.DocumentDb.Test.Integration
 
             private Because of = () =>
             {
-                sut.Insert(new List<TestDocument>() { _testDocument, _testDocument2 });
+                var list = new List<TestDocument> { _testDocument, _testDocument2 };
+                sut.Insert<TestDocument>(list);
                 _result = sut.Get<TestDocument>(_testDocument.Id);
             };
 
