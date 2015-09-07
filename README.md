@@ -1,4 +1,4 @@
 HighIronRanch.Azure
 =====================================
 
-Utilities for reading and writing to Azure Table Storage.
+Utilities for working with Azure.
