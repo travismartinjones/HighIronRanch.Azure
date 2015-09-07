@@ -90,7 +90,7 @@ namespace HighIronRanch.Azure.ServiceBus.Test.Integration
 
 			private Because of = () =>
 			{
-				sut.PublishAsync(new TestEvent() { Content = _testContent });
+				sut.PublishAsync(new TestEvent() { Content = _testContent }).Wait();
 				// give a few seconds for message to come across
 				var i = 30;
 				do

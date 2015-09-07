@@ -47,7 +47,7 @@ namespace HighIronRanch.Azure.ServiceBus.Test.Queues
 					var testContent = Guid.NewGuid().ToString();
 
 					Logger.Information("Main", "Publishing event for {0}", testContent);
-					bus.SendAsync(new TestCommand() { Content = testContent });
+					bus.SendAsync(new TestCommand() { Content = testContent }).Wait();
 					Logger.Information("Main", "Published");
 				}
 

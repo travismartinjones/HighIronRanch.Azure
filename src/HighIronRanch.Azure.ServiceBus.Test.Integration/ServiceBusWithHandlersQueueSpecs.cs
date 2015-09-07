@@ -108,7 +108,7 @@ namespace HighIronRanch.Azure.ServiceBus.Test.Integration
 
 			private Because of = () =>
 			{
-				sut.SendAsync(new TestCommand() { Content = _testContent });
+				sut.SendAsync(new TestCommand() { Content = _testContent }).Wait();
 				// give a few seconds for message to come across
 				var i = 30;
 				do
@@ -145,7 +145,7 @@ namespace HighIronRanch.Azure.ServiceBus.Test.Integration
 
 			private Because of = () =>
 			{
-				sut.SendAsync(new TestCommand() { Content = _testContent });
+				sut.SendAsync(new TestCommand() { Content = _testContent }).Wait();
 				_logger.Information(_context, "Command sent");
 				// The handler takes a while
 				Thread.Sleep(59000);

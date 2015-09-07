@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 2013
-VisualStudioVersion = 12.0.31101.0
+# Visual Studio 14
+VisualStudioVersion = 14.0.23107.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HighIronRanch.Azure.TableStorage", "HighIronRanch.Azure.TableStorage\HighIronRanch.Azure.TableStorage.csproj", "{DA7CCC9C-F2B0-47DB-B50A-4582671E0264}"
 EndProject
@@ -16,6 +16,10 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HighIronRanch.Azure.ServiceBus.Test.Common", "HighIronRanch.Azure.ServiceBus.Test.Common\HighIronRanch.Azure.ServiceBus.Test.Common.csproj", "{A500165C-BAAF-4EC1-9174-F9FE0420A328}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HighIronRanch.Azure.ServiceBus.Test.Queues", "HighIronRanch.Azure.ServiceBus.Test.Queues\HighIronRanch.Azure.ServiceBus.Test.Queues.csproj", "{9BE5F83F-E63B-4D20-B55A-4ED2BE0B90BA}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HighIronRanch.Azure.DocumentDb", "HighIronRanch.Azure.DocumentDb\HighIronRanch.Azure.DocumentDb.csproj", "{0A244BCB-DA36-4E9F-A0BA-56B93A6280FB}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HighIronRanch.Azure.DocumentDb.Test.Integration", "HighIronRanch.Azure.DocumentDb.Test.Integration\HighIronRanch.Azure.DocumentDb.Test.Integration.csproj", "{03961703-0F8B-4970-B5FC-85B0CB83508B}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -51,6 +55,14 @@ Global
 		{9BE5F83F-E63B-4D20-B55A-4ED2BE0B90BA}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{9BE5F83F-E63B-4D20-B55A-4ED2BE0B90BA}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{9BE5F83F-E63B-4D20-B55A-4ED2BE0B90BA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0A244BCB-DA36-4E9F-A0BA-56B93A6280FB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0A244BCB-DA36-4E9F-A0BA-56B93A6280FB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0A244BCB-DA36-4E9F-A0BA-56B93A6280FB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0A244BCB-DA36-4E9F-A0BA-56B93A6280FB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{03961703-0F8B-4970-B5FC-85B0CB83508B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{03961703-0F8B-4970-B5FC-85B0CB83508B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{03961703-0F8B-4970-B5FC-85B0CB83508B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{03961703-0F8B-4970-B5FC-85B0CB83508B}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

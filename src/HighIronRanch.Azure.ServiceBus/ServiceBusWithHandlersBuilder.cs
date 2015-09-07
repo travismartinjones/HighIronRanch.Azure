@@ -196,7 +196,10 @@ namespace HighIronRanch.Azure.ServiceBus
 					.SelectMany(assembly => assembly.GetTypes())
 					.Where(type => type.DoesTypeImplementInterface(typeof (ICommand)));
 
-				await CreateQueuesAsync(commandTypesInAssemblies, bus);
+                var found = string.Join(",", commandTypesInAssemblies.Select(e => e.Name));
+                _logger.Debug(ServiceBusWithHandlers.LoggerContext, "Found the following commands: {0}", found);
+
+                await CreateQueuesAsync(commandTypesInAssemblies, bus);
 			}
 		}
 
@@ -209,6 +212,9 @@ namespace HighIronRanch.Azure.ServiceBus
 				var eventTypesInAssemblies = assemblies
 					.SelectMany(assembly => assembly.GetTypes())
 					.Where(type => type.DoesTypeImplementInterface(typeof (IEvent)));
+
+                var found = string.Join(",", eventTypesInAssemblies.Select(e => e.Name));
+                _logger.Debug(ServiceBusWithHandlers.LoggerContext, "Found the following events: {0}", found);
 
 				await CreateEventsAsync(eventTypesInAssemblies, bus);
 			}
@@ -248,7 +254,10 @@ namespace HighIronRanch.Azure.ServiceBus
 					.SelectMany(assembly => assembly.GetTypes())
 					.Where(type => type.DoesTypeImplementInterface(typeof(IEventHandler<>)));
 
-				await CreateHandledEventsAsync(eventHandlerTypesInAssemblies, bus);
+                var found = string.Join(",", eventHandlerTypesInAssemblies.Select(e => e.Name));
+                _logger.Debug(ServiceBusWithHandlers.LoggerContext, "Found the following event handlers: {0}", found);
+
+                await CreateHandledEventsAsync(eventHandlerTypesInAssemblies, bus);
 			}
 		}
 
@@ -262,7 +271,10 @@ namespace HighIronRanch.Azure.ServiceBus
 					.SelectMany(assembly => assembly.GetTypes())
 					.Where(type => type.DoesTypeImplementInterface(typeof(ICommandHandler<>)));
 
-				await CreateHandledQueuesAsync(handlerTypesInAssemblies, bus);
+                var found = string.Join(",", handlerTypesInAssemblies.Select(e => e.Name));
+                _logger.Debug(ServiceBusWithHandlers.LoggerContext, "Found the following command handlers: {0}", found);
+
+                await CreateHandledQueuesAsync(handlerTypesInAssemblies, bus);
 			}
 		}
 
