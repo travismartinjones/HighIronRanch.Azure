@@ -403,17 +403,17 @@ namespace HighIronRanch.Azure.ServiceBus
 					_logger.Debug(LoggerContext, string.Format("Session accepted: {0}", session.SessionId));
 					session.OnMessageAsync(messageHandler, options);
 				}
-				catch (TimeoutException)
+				catch (TimeoutException ex)
 				{
-					_logger.Debug(LoggerContext, string.Format("Session timeout: {0}", Thread.CurrentThread.ManagedThreadId));
+                    _logger.Debug(LoggerContext, ex, "Session timeout: {0}", Thread.CurrentThread.ManagedThreadId);
 				}
-				catch (OperationCanceledException)
+				catch (OperationCanceledException ex)
 				{
-					_logger.Information(LoggerContext, string.Format("Cancelled: {0}", Thread.CurrentThread.ManagedThreadId));
+					_logger.Information(LoggerContext, ex, "Cancelled: {0}", Thread.CurrentThread.ManagedThreadId);
 				}
 				catch (Exception ex)
 				{
-					_logger.Error(LoggerContext, string.Format("Session exception: {0}", ex.Message));
+					_logger.Error(LoggerContext, ex, "Session exception: {0}", ex.Message);
 					throw;
 				}
 
