@@ -414,7 +414,6 @@ namespace HighIronRanch.Azure.ServiceBus
 				catch (Exception ex)
 				{
 					_logger.Error(LoggerContext, ex, "Session exception: {0}", ex.Message);
-					throw;
 				}
 
 				await Task.Run(() => StartSessionAsync(client, clientAccept, messageHandler, options, token), token);
