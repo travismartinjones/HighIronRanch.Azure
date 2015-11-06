@@ -227,6 +227,7 @@ namespace HighIronRanch.Azure.ServiceBus
 
 			brokeredMessage.ContentType = evt.GetType().AssemblyQualifiedName;
 
+            _logger.Debug(LoggerContext, "Publishing event {0} to {1}", evt.GetType().Name, client.GetType().Name);
 			await client.SendAsync(brokeredMessage);
 		}
 
@@ -305,6 +306,8 @@ namespace HighIronRanch.Azure.ServiceBus
 			try
 			{
 				var eventType = Type.GetType(eventToHandle.ContentType);
+
+                _logger.Debug(LoggerContext, "Handling event {0}", eventType.Name);
 
 				object message;
 				if (_useJsonSerialization)
@@ -405,7 +408,8 @@ namespace HighIronRanch.Azure.ServiceBus
 				}
 				catch (TimeoutException ex)
 				{
-                    _logger.Debug(LoggerContext, ex, "Session timeout: {0}", Thread.CurrentThread.ManagedThreadId);
+                    //_logger.Debug(LoggerContext, ex, "Session timeout: {0}", Thread.CurrentThread.ManagedThreadId);
+                    // This is normal. Any logging is noise.
 				}
 				catch (OperationCanceledException ex)
 				{
