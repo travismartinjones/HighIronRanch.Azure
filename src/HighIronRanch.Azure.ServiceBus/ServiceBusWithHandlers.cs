@@ -384,7 +384,7 @@ namespace HighIronRanch.Azure.ServiceBus
 			}
 			catch (Exception ex)
 			{
-				Console.WriteLine(" Abandoning {0}: {1}", messageToHandle.MessageId, ex.Message);
+                _logger.Warning(LoggerContext, ex, " Abandoning {0}: {1}", messageToHandle.MessageId, ex.Message);
 				messageToHandle.Abandon();
 			}
 
