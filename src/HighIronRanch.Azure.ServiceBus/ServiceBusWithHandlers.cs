@@ -26,7 +26,7 @@ namespace HighIronRanch.Azure.ServiceBus
 		private bool _useJsonSerialization = true;
 		private readonly IHandlerActivator _handlerActivator;
 		private readonly ILogger _logger;
-		protected CancellationToken _cancellationToken = new CancellationToken();
+        protected CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
 
 		// ICommand, QueueClient
 		protected readonly IDictionary<Type, QueueClient> _queueClients = new Dictionary<Type, QueueClient>();
@@ -38,9 +38,10 @@ namespace HighIronRanch.Azure.ServiceBus
 		protected readonly IDictionary<Type, TopicClient> _topicClients = new Dictionary<Type, TopicClient>();
  
 		// IEvent, ISet<IEventHandler>
-		protected readonly IDictionary<Type, ISet<Type>> _eventHandlers = new Dictionary<Type, ISet<Type>>(); 
+		protected readonly IDictionary<Type, ISet<Type>> _eventHandlers = new Dictionary<Type, ISet<Type>>();
+	    private readonly TimeSpan _sessionWaitTime = new TimeSpan(0, 0, 2);
 
-		public ServiceBusWithHandlers(IServiceBus serviceBus, IHandlerActivator handlerActivator, ILogger logger)
+	    public ServiceBusWithHandlers(IServiceBus serviceBus, IHandlerActivator handlerActivator, ILogger logger)
 		{
 			_serviceBus = serviceBus;
 			_handlerActivator = handlerActivator;
@@ -59,7 +60,11 @@ namespace HighIronRanch.Azure.ServiceBus
 
 		protected virtual void Dispose(bool disposing)
 		{
-			if (!disposing)
+            // stop the handlers
+            _cancellationTokenSource.Cancel();
+            Thread.Sleep(_sessionWaitTime);
+
+            if (!disposing)
 			{
 				// Unsubscribe
 				foreach (var eventType in _eventHandlers.Keys)
@@ -166,6 +171,7 @@ namespace HighIronRanch.Azure.ServiceBus
 			}
 
 			await client.SendAsync(brokeredMessage);
+            _logger.Information(LoggerContext, "Sent command {0}", command.GetType().ToString());
 		}
 
 		internal async Task CreateTopicAsync(Type type)
@@ -240,7 +246,7 @@ namespace HighIronRanch.Azure.ServiceBus
 				if (typeof (IAggregateCommand).IsAssignableFrom(messageType))
 				{
 #pragma warning disable 4014
-					Task.Run(() => StartSessionAsync(client, AcceptMessageSession, HandleMessage, options, _cancellationToken));
+					Task.Run(() => StartSessionAsync(client, AcceptMessageSession, HandleMessage, options, _cancellationTokenSource.Token));
 #pragma warning restore 4014
 				}
 				else
@@ -393,35 +399,39 @@ namespace HighIronRanch.Azure.ServiceBus
 
 		internal async Task<MessageSession> AcceptMessageSession(QueueClient client)
 		{
-			return await client.AcceptMessageSessionAsync(new TimeSpan(0, 0, 2));
+		    return await client.AcceptMessageSessionAsync(_sessionWaitTime);
 		}
 
-		internal async Task StartSessionAsync(QueueClient client, Func<QueueClient, Task<MessageSession>> clientAccept, Func<BrokeredMessage, Task> messageHandler, OnMessageOptions options, CancellationToken token)
+	    internal async Task StartSessionAsync(QueueClient client, Func<QueueClient, Task<MessageSession>> clientAccept, Func<BrokeredMessage, Task> messageHandler, OnMessageOptions options, CancellationToken token)
 		{
-			if (!token.IsCancellationRequested)
-			{
-				try
-				{
-					var session = await clientAccept(client);
-					_logger.Debug(LoggerContext, string.Format("Session accepted: {0}", session.SessionId));
-					session.OnMessageAsync(messageHandler, options);
-				}
-				catch (TimeoutException ex)
-				{
-                    //_logger.Debug(LoggerContext, ex, "Session timeout: {0}", Thread.CurrentThread.ManagedThreadId);
-                    // This is normal. Any logging is noise.
-				}
-				catch (OperationCanceledException ex)
-				{
-					_logger.Information(LoggerContext, ex, "Cancelled: {0}", Thread.CurrentThread.ManagedThreadId);
-				}
-				catch (Exception ex)
-				{
-					_logger.Error(LoggerContext, ex, "Session exception: {0}", ex.Message);
-				}
+		    if (!token.IsCancellationRequested)
+		    {
+		        try
+		        {
+		            var session = await clientAccept(client);
+		            _logger.Debug(LoggerContext, string.Format("Session accepted: {0}", session.SessionId));
+		            session.OnMessageAsync(messageHandler, options);
+		        }
+		        catch (TimeoutException ex)
+		        {
+		            //_logger.Debug(LoggerContext, ex, "Session timeout: {0}", Thread.CurrentThread.ManagedThreadId);
+		            // This is normal. Any logging is noise.
+		        }
+		        catch (OperationCanceledException ex)
+		        {
+		            _logger.Information(LoggerContext, ex, "Cancelled: {0}", Thread.CurrentThread.ManagedThreadId);
+		        }
+		        catch (Exception ex)
+		        {
+		            _logger.Error(LoggerContext, ex, "Session exception: {0}", ex.Message);
+		        }
 
-				await Task.Run(() => StartSessionAsync(client, clientAccept, messageHandler, options, token), token);
-			}
+		        await Task.Run(() => StartSessionAsync(client, clientAccept, messageHandler, options, token), token);
+		    }
+		    else
+		    {
+		        _logger.Debug(LoggerContext, "Cancellation Requested for {0}", messageHandler.Method.Name);
+		    }
 		}
 	}
 }

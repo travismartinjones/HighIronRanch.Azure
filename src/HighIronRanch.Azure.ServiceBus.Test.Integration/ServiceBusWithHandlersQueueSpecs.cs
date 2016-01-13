@@ -17,7 +17,7 @@ namespace HighIronRanch.Azure.ServiceBus.Test.Integration
 			public string Content;
 		}
 
-		public class TestCommandHandler : ICommandHandler<TestCommand>
+        public class TestCommandHandler : ICommandHandler<TestCommand>
 		{
 			public static string LastHandledContent;
 
@@ -27,7 +27,27 @@ namespace HighIronRanch.Azure.ServiceBus.Test.Integration
 			}
 		}
 
-		public class TestCommandLongHandler : ICommandHandler<TestCommand>
+        public class TestAggCommand : IAggregateCommand
+        {
+            public string Content;
+            public string AggregateId;
+            public string GetAggregateId()
+            {
+                return AggregateId;
+            }
+        }
+
+        public class TestAggCommandHandler : IAggregateCommandHandler<TestAggCommand>
+        {
+            public static string LastHandledContent;
+
+            public async Task HandleAsync(TestAggCommand command, ICommandActions actions)
+            {
+                LastHandledContent = command.Content;
+            }
+        }
+
+        public class TestCommandLongHandler : ICommandHandler<TestCommand>
 		{
 			public static string LastHandledContent;
 
@@ -42,14 +62,26 @@ namespace HighIronRanch.Azure.ServiceBus.Test.Integration
 
 		public class HandlerActivator : IHandlerActivator
 		{
-			public object GetInstance(Type type)
-			{
+		    private readonly ILogger _logger;
+
+		    public HandlerActivator(ILogger logger)
+		    {
+		        _logger = logger;
+		    }
+
+		    public object GetInstance(Type type)
+		    {
+		        _logger.Debug("HandlerActivator", "Getting Instance of {0}", type.Name);
+
 				switch (type.Name)
 				{
 					case "TestCommandHandler":
 						return new TestCommandHandler();
 
-					case "TestCommandLongHandler":
+                    case "TestAggCommandHandler":
+                        return new TestAggCommandHandler();
+
+                    case "TestCommandLongHandler":
 						return new TestCommandLongHandler();
 				}
 
@@ -61,16 +93,19 @@ namespace HighIronRanch.Azure.ServiceBus.Test.Integration
 		public class Concern : Observes<ServiceBusWithHandlers>
 		{
 			protected static IServiceBus _serviceBus;
+		    protected static ILogger _logger;
 
 			private Establish ee = () =>
 			{
+                _logger = new TraceLogger();
+
 				var settings = ServiceBusSettings.Create();
 				var nsManager = new NamespaceManagerBuilder();
 
 				_serviceBus = new ServiceBus(settings, nsManager);
 
 				depends.on(_serviceBus);
-				depends.on(new HandlerActivator());
+				depends.on(new HandlerActivator(_logger));
 			};
 		}
 
@@ -78,24 +113,26 @@ namespace HighIronRanch.Azure.ServiceBus.Test.Integration
 		{
 			private Cleanup cc = () =>
 			{
-				var task = _serviceBus.DeleteQueueAsync(typeof (TestCommand).FullName);
+                sut.Dispose();
+			    //Thread.Sleep(2000);
+                var task = _serviceBus.DeleteQueueAsync(typeof (TestCommand).FullName);
 				task.Wait();
-				//sut.Dispose();
-			};
+                task = _serviceBus.DeleteQueueAsync(typeof(TestAggCommand).FullName);
+                task.Wait();
+            };
 		}
 
 		public class When_sending_a_command : CleaningConcern
 		{
-			private static string _testContent = "Howdy"; // Guid.NewGuid().ToString();
+			private static string _testContent = Guid.NewGuid().ToString();
 
 			private Establish context = () =>
 			{
-				var logger = fake.an<ILogger>();
-				var activator = new HandlerActivator();
+				var activator = new HandlerActivator(_logger);
 
 				sut_factory.create_using(() =>
 				{
-					var busBuilder = new ServiceBusWithHandlersBuilder(_serviceBus, activator, logger);
+					var busBuilder = new ServiceBusWithHandlersBuilder(_serviceBus, activator, _logger);
 
 					busBuilder.CreateServiceBus()
 						.WithCommandHandlers(new List<Type>() {typeof (TestCommandHandler)});
@@ -121,15 +158,51 @@ namespace HighIronRanch.Azure.ServiceBus.Test.Integration
 			private It should_be_handled = () => TestCommandHandler.LastHandledContent.ShouldEqual(_testContent);
 		}
 
-		public class When_sending_a_long_running_command : CleaningConcern
+        public class When_sending_an_aggregate_command : CleaningConcern
+        {
+            private static string _testContent = Guid.NewGuid().ToString();
+
+            private Establish context = () =>
+            {
+                var activator = new HandlerActivator(_logger);
+
+                sut_factory.create_using(() =>
+                {
+                    var busBuilder = new ServiceBusWithHandlersBuilder(_serviceBus, activator, _logger);
+
+                    busBuilder.CreateServiceBus()
+                        .WithCommandHandlers(new List<Type>() { typeof(TestAggCommandHandler) });
+                    var task = busBuilder.BuildAsync();
+                    task.Wait();
+                    var bus = task.Result;
+                    return bus;
+                });
+            };
+
+            private Because of = () =>
+            {
+                sut.SendAsync(new TestAggCommand() { Content = _testContent, AggregateId = "AggId"}).Wait();
+
+                // give a few seconds for message to come across
+                var i = 30;
+                do
+                {
+                    Thread.Sleep(100);
+                    i--;
+                } while (i > 0 && TestAggCommandHandler.LastHandledContent != _testContent);
+            };
+
+            private It should_be_handled = () => TestAggCommandHandler.LastHandledContent.ShouldEqual(_testContent);
+        }
+
+        public class When_sending_a_long_running_command : CleaningConcern
 		{
 			private static string _context = "Long running test";
 			private static string _testContent = Guid.NewGuid().ToString();
-			private static ILogger _logger = new TraceLogger();
 
 			private Establish context = () =>
 			{
-				var activator = new HandlerActivator();
+				var activator = new HandlerActivator(_logger);
 
 				sut_factory.create_using(() =>
 				{
