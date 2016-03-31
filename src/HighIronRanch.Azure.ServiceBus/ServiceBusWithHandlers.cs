@@ -279,7 +279,7 @@ namespace HighIronRanch.Azure.ServiceBus
 			}
 		}
 
-		private Task HandleEventForMultipleDeployments(BrokeredMessage eventToHandle)
+		private async Task HandleEventForMultipleDeployments(BrokeredMessage eventToHandle)
 		{
 			try
 			{
@@ -301,13 +301,12 @@ namespace HighIronRanch.Azure.ServiceBus
 			catch (Exception ex)
 			{
 				Console.WriteLine(" Abandoning {0}: {1}", eventToHandle.MessageId, ex.Message);
+			    await Task.Delay(100);
 				eventToHandle.Abandon();
 			}
-
-			return Task.FromResult(0);
 		}
 
-		private Task HandleEvent(BrokeredMessage eventToHandle)
+		private async Task HandleEvent(BrokeredMessage eventToHandle)
 		{
 			try
 			{
@@ -333,7 +332,7 @@ namespace HighIronRanch.Azure.ServiceBus
 				{
 					var handler = _handlerActivator.GetInstance(handlerType);
 					var handleMethodInfo = handlerType.GetMethod("HandleAsync", new[] { eventType });
-					handleMethodInfo.Invoke(handler, new[] { message });
+					await (Task)handleMethodInfo.Invoke(handler, new[] { message });
 				}
 
 				eventToHandle.Complete();
@@ -341,13 +340,12 @@ namespace HighIronRanch.Azure.ServiceBus
 			catch (Exception ex)
 			{
 				Console.WriteLine(" Abandoning {0}: {1}", eventToHandle.MessageId, ex.Message);
+			    await Task.Delay(100);
 				eventToHandle.Abandon();
 			}
-
-			return Task.FromResult(0);
 		}
 
-		private Task HandleMessage(BrokeredMessage messageToHandle)
+		private async Task HandleMessage(BrokeredMessage messageToHandle)
 		{
 			try
 			{
@@ -373,7 +371,7 @@ namespace HighIronRanch.Azure.ServiceBus
 					{
 						var handler = _handlerActivator.GetInstance(handlerType);
 						var handleMethodInfo = handlerType.GetMethod("HandleAsync", new[] { messageType });
-						handleMethodInfo.Invoke(handler, new[] { message });
+						await (Task)handleMethodInfo.Invoke(handler, new[] { message });
 					}
 				}
 				else
@@ -382,8 +380,7 @@ namespace HighIronRanch.Azure.ServiceBus
 					var handler = _handlerActivator.GetInstance(handlerType);
 
 					var handleMethodInfo = handlerType.GetMethod("HandleAsync", new[] { messageType, typeof(ICommandActions) });
-					var task = (Task)handleMethodInfo.Invoke(handler, new[] { message, new CommandActions(messageToHandle) });
-					task.Wait();
+					await (Task)handleMethodInfo.Invoke(handler, new[] { message, new CommandActions(messageToHandle) });
 				}
 
 				messageToHandle.Complete();
@@ -391,10 +388,9 @@ namespace HighIronRanch.Azure.ServiceBus
 			catch (Exception ex)
 			{
                 _logger.Warning(LoggerContext, ex, " Abandoning {0}: {1}", messageToHandle.MessageId, ex.Message);
+			    await Task.Delay(100);
 				messageToHandle.Abandon();
 			}
-
-			return Task.FromResult(0);
 		}
 
 		internal async Task<MessageSession> AcceptMessageSession(QueueClient client)
