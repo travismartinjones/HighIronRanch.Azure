@@ -18,8 +18,15 @@ namespace HighIronRanch.Azure.ServiceBus.Test.Topics
 			settings.ServiceBusSubscriptionNamePrefix = DateTime.Now.ToString("hhmmss");
 
 			var nsManager = new NamespaceManagerBuilder();
+#if USE_MESSAGING_FACTORY
+            var factoryBuilder = new MessagingFactoryBuilder();
+#endif
 
-			var serviceBus = new ServiceBus(settings, nsManager);
+			var serviceBus = new ServiceBus(settings, nsManager
+#if USE_MESSAGING_FACTORY
+                , factoryBuilder
+#endif
+                );
 
 			Logger = new Logger();
 			var activator = new HandlerActivator();

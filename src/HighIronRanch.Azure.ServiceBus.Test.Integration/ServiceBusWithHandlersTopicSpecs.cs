@@ -50,8 +50,15 @@ namespace HighIronRanch.Azure.ServiceBus.Test.Integration
 			{
 				var settings = ServiceBusSettings.Create();
 				var nsManager = new NamespaceManagerBuilder();
+#if USE_MESSAGING_FACTORY
+                var factoryBuilder = new MessagingFactoryBuilder();
+#endif
 
-				_serviceBus = new ServiceBus(settings, nsManager);
+                _serviceBus = new ServiceBus(settings, nsManager
+#if USE_MESSAGING_FACTORY
+                    , factoryBuilder
+#endif
+                    );
 			};
 		}
 

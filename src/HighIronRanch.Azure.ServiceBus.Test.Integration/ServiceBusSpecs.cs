@@ -122,7 +122,15 @@ namespace HighIronRanch.Azure.ServiceBus.Test.Integration
 
 		public class TestableServiceBus : ServiceBus
 		{
-			public TestableServiceBus(IServiceBusSettings settings, INamespaceManagerBuilder managerBuilder) : base(settings, managerBuilder)
+			public TestableServiceBus(IServiceBusSettings settings, INamespaceManagerBuilder managerBuilder
+#if USE_MESSAGING_FACTORY
+                , IMessagingFactoryBuilder factoryBuilder
+#endif
+                ) : base(settings, managerBuilder
+#if USE_MESSAGING_FACTORY
+                    , factoryBuilder
+#endif
+                    )
 			{
 			}
 

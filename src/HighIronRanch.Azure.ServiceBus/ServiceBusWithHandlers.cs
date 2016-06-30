@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using HighIronRanch.Azure.ServiceBus.Contracts;
@@ -127,6 +128,13 @@ namespace HighIronRanch.Azure.ServiceBus
 			_logger.Information(LoggerContext, "Creating {0} queue for {1}", isCommand ? "command" : "message", type);
 
 			var client = await _serviceBus.CreateQueueClientAsync(type.FullName, isCommand);
+
+            // get SbmpMessagingFactory ConnectionId for logging
+            var mfConnectionId = client.MessagingFactory.GetType()
+                .GetProperty("ConnectionId", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                .GetValue(client.MessagingFactory)
+                .ToString();
+            _logger.Debug(LoggerContext, "QueueClient {0} MessagingFactory {1}", type, mfConnectionId);
 
 			_queueClients.Add(type, client);
 		}
@@ -408,7 +416,7 @@ namespace HighIronRanch.Azure.ServiceBus
 		            _logger.Debug(LoggerContext, string.Format("Session accepted: {0}", session.SessionId));
 		            session.OnMessageAsync(messageHandler, options);
 		        }
-		        catch (TimeoutException ex)
+		        catch (TimeoutException /*ex*/)
 		        {
 		            //_logger.Debug(LoggerContext, ex, "Session timeout: {0}", Thread.CurrentThread.ManagedThreadId);
 		            // This is normal. Any logging is noise.

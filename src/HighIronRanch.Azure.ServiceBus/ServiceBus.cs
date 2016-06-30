@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using HighIronRanch.Core.Services;
 using Microsoft.ServiceBus;
 using Microsoft.ServiceBus.Messaging;
 
@@ -27,20 +28,37 @@ namespace HighIronRanch.Azure.ServiceBus
 
 	public class ServiceBus : IServiceBus
 	{
-		private readonly IServiceBusSettings _settings;
+	    private readonly ILogger _logger;
+	    private readonly IServiceBusSettings _settings;
 		protected NamespaceManager _manager;
+#if USE_MESSAGING_FACTORY
+        protected MessagingFactory _messagingFactory;
+#endif
 
-		public ServiceBus(IServiceBusSettings settings, INamespaceManagerBuilder managerBuilder)
-		{
-			_settings = settings;
+		public ServiceBus(
+            IServiceBusSettings settings, 
+            INamespaceManagerBuilder managerBuilder
+#if USE_MESSAGING_FACTORY
+            , IMessagingFactoryBuilder factoryBuilder
+#endif
+            )
+        {
+		    _settings = settings;
 
 			_manager = managerBuilder
 				.CreateNamespaceBuilder()
 				.WithConnectionString(_settings.AzureServiceBusConnectionString)
 				.Build();
-		}
 
-		protected static string CleanseName(string name)
+#if USE_MESSAGING_FACTORY
+            _messagingFactory = factoryBuilder
+                .CreateMessagingFactoryBuilder()
+                .WithConnectionString(_settings.AzureServiceBusConnectionString)
+                .Build();
+#endif
+        }
+
+        protected static string CleanseName(string name)
 		{
 			// Entity segments can contain only letters, numbers, periods (.), hyphens (-), and underscores (_)
 			return Regex.Replace(name, @"[^a-zA-Z0-9\.\-_]", "_");
@@ -106,7 +124,12 @@ namespace HighIronRanch.Azure.ServiceBus
 			var queueName = CreateQueueName(name);
 			await CreateCleansedNameQueueAsync(queueName, isSessionRequired);
 
-			return QueueClient.CreateFromConnectionString(_settings.AzureServiceBusConnectionString, queueName);
+#if USE_MESSAGING_FACTORY
+		    var client = _messagingFactory.CreateQueueClient(queueName);
+#else
+            var client = QueueClient.CreateFromConnectionString(_settings.AzureServiceBusConnectionString, queueName);
+#endif
+		    return client;
 		}
 
 		public async Task DeleteQueueAsync(string name)
