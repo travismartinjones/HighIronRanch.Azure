@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using developwithpassion.specifications.rhinomocks;
@@ -20,10 +21,12 @@ namespace HighIronRanch.Azure.ServiceBus.Test.Integration
         public class TestCommandHandler : ICommandHandler<TestCommand>
 		{
 			public static string LastHandledContent;
+            public static int CallCount = 0;
 
 			public async Task HandleAsync(TestCommand command, ICommandActions actions)
 			{
 				LastHandledContent = command.Content;
+			    CallCount++;
 			}
 		}
 
@@ -164,6 +167,49 @@ namespace HighIronRanch.Azure.ServiceBus.Test.Integration
 
 			private It should_be_handled = () => TestCommandHandler.LastHandledContent.ShouldEqual(_testContent);
 		}
+
+        public class When_sending_a_duplicate_command : CleaningConcern
+        {
+            private static string _testContent = Guid.NewGuid().ToString();
+
+            private Establish context = () =>
+            {
+                var activator = new HandlerActivator(_logger);
+
+                sut_factory.create_using(() =>
+                {
+                    var busBuilder = new ServiceBusWithHandlersBuilder(_serviceBus, activator, _logger);
+
+                    busBuilder.CreateServiceBus()
+                        .WithCommandHandlers(new List<Type>() { typeof(TestCommandHandler) });
+                    var task = busBuilder.BuildAsync();
+                    task.Wait();
+                    var bus = task.Result;
+                    return bus;
+                });
+            };
+
+            private Because of = () =>
+            {
+                TestCommandHandler.CallCount = 0;
+
+                sut.SendAsync(new TestCommand() { Content = _testContent }).Wait();
+                // give a few seconds for message to come across
+                var i = 30;
+                do
+                {
+                    Thread.Sleep(100);
+                    i--;
+                } while (i > 0 && TestCommandHandler.LastHandledContent != _testContent);
+
+                // Send it again
+                sut.SendAsync(new TestCommand() { Content = _testContent }).Wait();
+                // give a few seconds for message to come across, but we can't look for a data change
+                Thread.Sleep(3000);
+            };
+
+            private It should_not_be_handled = () => TestCommandHandler.CallCount.ShouldEqual(1);
+        }
 
         public class When_sending_an_aggregate_command : CleaningConcern
         {

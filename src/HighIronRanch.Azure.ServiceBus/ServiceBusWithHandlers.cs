@@ -178,6 +178,11 @@ namespace HighIronRanch.Azure.ServiceBus
 				brokeredMessage.SessionId = ((IAggregateCommand) command).GetAggregateId();
 			}
 
+		    if (brokeredMessage.Size > 260000)
+		    {
+		        _logger.Error(LoggerContext, "Service Bus Command exceeds 256K limit: {0}", brokeredMessage.Size);
+		    }
+
 			await client.SendAsync(brokeredMessage);
             _logger.Information(LoggerContext, "Sent command {0}", command.GetType().ToString());
 		}
@@ -403,10 +408,10 @@ namespace HighIronRanch.Azure.ServiceBus
 
 		internal async Task<MessageSession> AcceptMessageSession(QueueClient client)
 		{
-		    return await client.AcceptMessageSessionAsync(_sessionWaitTime);
-		}
+            return await client.AcceptMessageSessionAsync(_sessionWaitTime);
+        }
 
-	    internal async Task StartSessionAsync(QueueClient client, Func<QueueClient, Task<MessageSession>> clientAccept, Func<BrokeredMessage, Task> messageHandler, OnMessageOptions options, CancellationToken token)
+        internal async Task StartSessionAsync(QueueClient client, Func<QueueClient, Task<MessageSession>> clientAccept, Func<BrokeredMessage, Task> messageHandler, OnMessageOptions options, CancellationToken token)
 		{
 		    if (!token.IsCancellationRequested)
 		    {
@@ -420,6 +425,12 @@ namespace HighIronRanch.Azure.ServiceBus
 		        {
 		            //_logger.Debug(LoggerContext, ex, "Session timeout: {0}", Thread.CurrentThread.ManagedThreadId);
 		            // This is normal. Any logging is noise.
+		        }
+		        catch (MessagingException ex)
+		        {
+		            // These are transient notifications of retry logic under the covers. Only useful if things
+                    // really go bad.
+                    _logger.Debug(LoggerContext, ex, "If everything looks good, this can be ignored.");
 		        }
 		        catch (OperationCanceledException ex)
 		        {
