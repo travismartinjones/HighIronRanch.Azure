@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -16,7 +17,7 @@ namespace HighIronRanch.Azure.DocumentDb
         protected readonly IDocumentDbClientFactory _clientFactory;
         protected readonly ILogger _logger;
 
-        protected readonly IDictionary<Type, Uri> _collectionUris = new Dictionary<Type, Uri>(); 
+        protected readonly IDictionary<Type, Uri> _collectionUris = new ConcurrentDictionary<Type, Uri>(); 
 
         public DocumentDbReadModelRepository(IDocumentDbSettings settings, IDocumentDbClientFactory clientFactory, ILogger logger)
         {

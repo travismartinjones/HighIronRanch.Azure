@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -13,7 +14,7 @@ namespace HighIronRanch.Azure.ServiceBus
 	public interface IServiceBusWithHandlers : IDisposable
 	{
 		void UseJsonMessageSerialization(bool useJsonSerialization);
-		Task SendAsync(ICommand command);
+		Task SendAsync(ICommand command, DateTime? enqueueTime);
 		Task PublishAsync(IEvent evt);
 	}
 
@@ -29,16 +30,16 @@ namespace HighIronRanch.Azure.ServiceBus
         protected CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
 
 		// ICommand, QueueClient
-		protected readonly IDictionary<Type, QueueClient> _queueClients = new Dictionary<Type, QueueClient>();
+		protected readonly IDictionary<Type, QueueClient> _queueClients = new ConcurrentDictionary<Type, QueueClient>();
 
 		// ICommand, ICommandHandler
-		protected readonly IDictionary<Type, Type> _queueHandlers = new Dictionary<Type, Type>();
+		protected readonly IDictionary<Type, Type> _queueHandlers = new ConcurrentDictionary<Type, Type>();
 
 		// IEvent, TopicClient
-		protected readonly IDictionary<Type, TopicClient> _topicClients = new Dictionary<Type, TopicClient>();
+		protected readonly IDictionary<Type, TopicClient> _topicClients = new ConcurrentDictionary<Type, TopicClient>();
  
 		// IEvent, ISet<IEventHandler>
-		protected readonly IDictionary<Type, ISet<Type>> _eventHandlers = new Dictionary<Type, ISet<Type>>();
+		protected readonly IDictionary<Type, ISet<Type>> _eventHandlers = new ConcurrentDictionary<Type, ISet<Type>>();
 	    private readonly TimeSpan _sessionWaitTime = new TimeSpan(0, 0, 2);
 
 	    public ServiceBusWithHandlers(IServiceBus serviceBus, IHandlerActivator handlerActivator, ILogger logger)
@@ -146,10 +147,10 @@ namespace HighIronRanch.Azure.ServiceBus
 			}
 		}
 
-		public async Task SendAsync(ICommand command)
+		public async Task SendAsync(ICommand command, DateTime? enqueueTime = null)
 		{
 			var isCommand = command is IAggregateCommand;
-			var client = _queueClients[command.GetType()];
+			var client = _queueClients[command.GetType()];            
 
 			BrokeredMessage brokeredMessage;
 
@@ -157,7 +158,7 @@ namespace HighIronRanch.Azure.ServiceBus
 			{
 				var message = JsonConvert.SerializeObject(command);
 				brokeredMessage = new BrokeredMessage(message);
-				brokeredMessage.MessageId = message.GetHashCode().ToString();
+				brokeredMessage.MessageId = command.MessageId.ToString();
 			}
 			else
 			{
@@ -170,8 +171,21 @@ namespace HighIronRanch.Azure.ServiceBus
 				brokeredMessage.SessionId = ((IAggregateCommand) command).GetAggregateId();
 			}
 
-			await client.SendAsync(brokeredMessage);
-            _logger.Information(LoggerContext, "Sent command {0}", command.GetType().ToString());
+		    if (enqueueTime.HasValue)
+		    {
+		        brokeredMessage.ScheduledEnqueueTimeUtc = enqueueTime.Value;
+		    }
+
+		    try
+		    {
+		        await client.SendAsync(brokeredMessage);
+		    }
+		    catch (Exception ex)
+		    {
+		        _logger.Error(LoggerContext, "Sending command {0}", command.GetType().ToString());
+		    }
+
+		    _logger.Information(LoggerContext, "Sent command {0}", command.GetType().ToString());
 		}
 
 		internal async Task CreateTopicAsync(Type type)
@@ -224,7 +238,7 @@ namespace HighIronRanch.Azure.ServiceBus
 			{
 				var message = JsonConvert.SerializeObject(evt);
 				brokeredMessage = new BrokeredMessage(message);
-				brokeredMessage.MessageId = message.GetHashCode().ToString();
+				brokeredMessage.MessageId = evt.MessageId.ToString();
 			}
 			else
 			{
@@ -246,17 +260,19 @@ namespace HighIronRanch.Azure.ServiceBus
 				if (typeof (IAggregateCommand).IsAssignableFrom(messageType))
 				{
 #pragma warning disable 4014
-					Task.Run(() => StartSessionAsync(client, AcceptMessageSession, HandleMessage, options, _cancellationTokenSource.Token));
+                    Task.Run(() => StartSessionAsync(client, AcceptMessageSession, HandleMessage, options, _cancellationTokenSource.Token));
 #pragma warning restore 4014
-				}
-				else
+
+                }
+                else
 				{
 					options.MaxConcurrentCalls = 10;
 #pragma warning disable 4014
-					Task.Run(() => client.OnMessageAsync(HandleMessage, options));
+                    Task.Run(() => client.OnMessageAsync(HandleMessage, options));
 #pragma warning restore 4014
-				}
-			}
+
+                }
+            }
 
 			foreach (var eventType in _eventHandlers.Keys)
 			{
@@ -267,16 +283,24 @@ namespace HighIronRanch.Azure.ServiceBus
 
 				if (_hasMultipleDeployments)
 				{
-					client.OnMessageAsync(HandleEventForMultipleDeployments, options);
 
-					var qclient = _queueClients[eventType];
-					qclient.OnMessageAsync(HandleMessage, options);
-				}
-				else
+#pragma warning disable 4014
+                    Task.Run(() => client.OnMessageAsync(HandleEventForMultipleDeployments, options));
+
+                    Task.Run(() =>
+                    {
+                        var qclient = _queueClients[eventType];
+                        qclient.OnMessageAsync(HandleMessage, options);
+                    });
+#pragma warning restore 4014
+                }
+                else
 				{
-					client.OnMessageAsync(HandleEvent, options);
-				}
-			}
+#pragma warning disable 4014
+                    Task.Run(() => client.OnMessageAsync(HandleEvent, options));
+#pragma warning restore 4014
+                }
+            }
 		}
 
 		private async Task HandleEventForMultipleDeployments(BrokeredMessage eventToHandle)

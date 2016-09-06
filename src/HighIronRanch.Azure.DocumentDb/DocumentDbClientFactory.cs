@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -10,13 +11,6 @@ using Microsoft.Azure.Documents.Linq;
 
 namespace HighIronRanch.Azure.DocumentDb
 {
-    public interface IDocumentDbSettings
-    {
-        string DocumentDbRepositoryEndpointUrl { get; }
-        string DocumentDbRepositoryAuthKey { get; }
-        string DocumentDbRepositoryDatabaseId { get; }
-    }
-
     /// <summary>
     /// Make this a singleton.
     /// </summary>
@@ -24,7 +18,7 @@ namespace HighIronRanch.Azure.DocumentDb
     {
         private readonly ILogger _logger;
 
-        private IDictionary<string, DocumentClient> _clients = new Dictionary<string, DocumentClient>();
+        private IDictionary<string, DocumentClient> _clients = new ConcurrentDictionary<string, DocumentClient>();
 
         public DocumentDbClientFactory(ILogger logger)
         {

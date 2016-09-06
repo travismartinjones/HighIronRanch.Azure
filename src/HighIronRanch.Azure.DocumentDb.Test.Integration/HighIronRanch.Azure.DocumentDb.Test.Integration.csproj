@@ -38,8 +38,8 @@
       <HintPath>..\packages\developwithpassion.specifications.rhinomocks.0.6.0\lib\developwithpassion.specifications.rhinomocks.dll</HintPath>
       <Private>True</Private>
     </Reference>
-    <Reference Include="HighIronRanch.Core, Version=1.0.7.5, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\HighIronRanch.Core.1.0.7.5\lib\net45\HighIronRanch.Core.dll</HintPath>
+    <Reference Include="HighIronRanch.Core, Version=1.0.8.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\HighIronRanch.Core.1.0.8.0\lib\net45\HighIronRanch.Core.dll</HintPath>
       <Private>True</Private>
     </Reference>
     <Reference Include="Machine.Fakes, Version=2.7.0.0, Culture=neutral, processorArchitecture=MSIL">
@@ -62,8 +62,8 @@
       <HintPath>..\packages\Machine.Specifications.Should.0.7.2\lib\net45\Machine.Specifications.Should.dll</HintPath>
       <Private>True</Private>
     </Reference>
-    <Reference Include="Newtonsoft.Json, Version=6.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
-      <HintPath>..\packages\Newtonsoft.Json.6.0.8\lib\net45\Newtonsoft.Json.dll</HintPath>
+    <Reference Include="Newtonsoft.Json, Version=8.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
+      <HintPath>..\packages\Newtonsoft.Json.8.0.2\lib\net45\Newtonsoft.Json.dll</HintPath>
       <Private>True</Private>
     </Reference>
     <Reference Include="Rhino.Mocks, Version=3.6.0.0, Culture=neutral, PublicKeyToken=0b3305902db7183f, processorArchitecture=MSIL">

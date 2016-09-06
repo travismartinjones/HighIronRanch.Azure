@@ -4,6 +4,7 @@ namespace HighIronRanch.Azure.ServiceBus.Contracts
 {
 	public interface IAggregateCommand : ICommand
 	{
-		string GetAggregateId();
+        Guid MessageId { get; }
+        string GetAggregateId();
 	}
 }

@@ -15,6 +15,7 @@ namespace HighIronRanch.Azure.ServiceBus.Test.Integration
 		public class TestCommand : ICommand
 		{
 			public string Content;
+		    public Guid MessageId => Guid.NewGuid();
 		}
 
         public class TestCommandHandler : ICommandHandler<TestCommand>
@@ -31,6 +32,8 @@ namespace HighIronRanch.Azure.ServiceBus.Test.Integration
         {
             public string Content;
             public string AggregateId;
+            public Guid MessageId => Guid.NewGuid();
+
             public string GetAggregateId()
             {
                 return AggregateId;

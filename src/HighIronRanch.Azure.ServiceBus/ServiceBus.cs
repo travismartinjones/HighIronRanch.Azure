@@ -43,14 +43,14 @@ namespace HighIronRanch.Azure.ServiceBus
 		protected static string CleanseName(string name)
 		{
 			// Entity segments can contain only letters, numbers, periods (.), hyphens (-), and underscores (_)
-			return Regex.Replace(name, @"[^a-zA-Z0-9\.\-_]", "_");
+			return Regex.Replace(name, @"[^a-zA-Z0-9\.\-_]", "_").ToLower();
 		}
 
 		protected string CreatePrefix()
 		{
 			if (string.IsNullOrEmpty(_settings.ServiceBusMasterPrefix))
 				return "";
-			return _settings.ServiceBusMasterPrefix + ".";
+			return _settings.ServiceBusMasterPrefix.ToLower() + ".";
 		}
 
 		protected string CreateQueueName(string name)
