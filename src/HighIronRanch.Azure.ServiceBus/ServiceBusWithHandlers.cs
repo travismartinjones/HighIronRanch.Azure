@@ -14,7 +14,7 @@ namespace HighIronRanch.Azure.ServiceBus
 	public interface IServiceBusWithHandlers : IDisposable
 	{
 		void UseJsonMessageSerialization(bool useJsonSerialization);
-		Task SendAsync(ICommand command, DateTime? enqueueTime);
+		Task SendAsync(ICommand command, DateTime? enqueueTime = null);
 		Task PublishAsync(IEvent evt);
 	}
 
@@ -173,7 +173,7 @@ namespace HighIronRanch.Azure.ServiceBus
 
 		    if (enqueueTime.HasValue)
 		    {
-		        brokeredMessage.ScheduledEnqueueTimeUtc = enqueueTime.Value;
+		        brokeredMessage.ScheduledEnqueueTimeUtc = enqueueTime.Value.ToUniversalTime();
 		    }
 
 		    try
