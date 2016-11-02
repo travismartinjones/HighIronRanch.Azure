@@ -46,6 +46,19 @@ namespace HighIronRanch.Azure.DocumentDb
             task.Wait();
         }
 
+        public void Update<T>(T item) where T : IViewModel
+        {
+            var task = UpdateAsync(item);
+            task.Wait();
+        }
+
+        public async Task UpdateAsync<T>(T item) where T : IViewModel
+        {
+            var documentLink = GetDocumentLink<T>(item.Id.ToString());
+            var client = await _clientFactory.GetClientAsync(_settings);
+            await client.UpsertDocumentAsync(documentLink, item);
+        }
+
         public async Task DeleteAsync<T>(T item) where T : IViewModel
         {
             var documentLink = GetDocumentLink<T>(item.Id.ToString());
@@ -70,7 +83,7 @@ namespace HighIronRanch.Azure.DocumentDb
         {
             var task = InsertAsync(items);
             task.Wait();
-        }
+        }        
 
         public async Task InsertAsync<T>(IEnumerable<T> items) where T : IViewModel
         {
