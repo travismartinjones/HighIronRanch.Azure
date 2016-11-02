@@ -424,15 +424,15 @@ namespace HighIronRanch.Azure.ServiceBus
 
 	    internal async Task StartSessionAsync(QueueClient client, Func<QueueClient, Task<MessageSession>> clientAccept, Func<BrokeredMessage, Task> messageHandler, OnMessageOptions options, CancellationToken token)
 		{
-		    if (!token.IsCancellationRequested)
+		    while (!token.IsCancellationRequested)
 		    {
 		        try
 		        {
 		            var session = await clientAccept(client);
-		            _logger.Debug(LoggerContext, string.Format("Session accepted: {0}", session.SessionId));
-		            session.OnMessageAsync(messageHandler, options);
+		            _logger.Debug(LoggerContext, $"Session accepted: {session.SessionId}");
+		            session.OnMessageAsync(messageHandler, options);                    
 		        }
-		        catch (TimeoutException ex)
+		        catch (TimeoutException)
 		        {
 		            //_logger.Debug(LoggerContext, ex, "Session timeout: {0}", Thread.CurrentThread.ManagedThreadId);
 		            // This is normal. Any logging is noise.
@@ -445,13 +445,9 @@ namespace HighIronRanch.Azure.ServiceBus
 		        {
 		            _logger.Error(LoggerContext, ex, "Session exception: {0}", ex.Message);
 		        }
-
-		        await Task.Run(() => StartSessionAsync(client, clientAccept, messageHandler, options, token), token);
 		    }
-		    else
-		    {
-		        _logger.Debug(LoggerContext, "Cancellation Requested for {0}", messageHandler.Method.Name);
-		    }
+		    
+		    _logger.Debug(LoggerContext, "Cancellation Requested for {0}", messageHandler.Method.Name);		    
 		}
 	}
 }
