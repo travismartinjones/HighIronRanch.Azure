@@ -412,41 +412,37 @@ namespace HighIronRanch.Azure.ServiceBus
         }
 
         internal async Task StartSessionAsync(QueueClient client, Func<QueueClient, Task<MessageSession>> clientAccept, Func<BrokeredMessage, Task> messageHandler, OnMessageOptions options, CancellationToken token)
-		{
-		    if (!token.IsCancellationRequested)
-		    {
-		        try
-		        {
-		            var session = await clientAccept(client);
-		            _logger.Debug(LoggerContext, string.Format("Session accepted: {0}", session.SessionId));
-		            session.OnMessageAsync(messageHandler, options);
-		        }
-		        catch (TimeoutException /*ex*/)
-		        {
-		            //_logger.Debug(LoggerContext, ex, "Session timeout: {0}", Thread.CurrentThread.ManagedThreadId);
-		            // This is normal. Any logging is noise.
-		        }
-		        catch (MessagingException ex)
-		        {
-		            // These are transient notifications of retry logic under the covers. Only useful if things
+        {
+            while (!token.IsCancellationRequested)
+            {
+                try
+                {
+                    var session = await clientAccept(client);
+                    _logger.Debug(LoggerContext, $"Session accepted: {session.SessionId}");
+                    session.OnMessageAsync(messageHandler, options);
+                }
+                catch (TimeoutException)
+                {
+                    //_logger.Debug(LoggerContext, ex, "Session timeout: {0}", Thread.CurrentThread.ManagedThreadId);
+                    // This is normal. Any logging is noise.
+                }
+                catch (MessagingException ex)
+                {
+                    // These are transient notifications of retry logic under the covers. Only useful if things
                     // really go bad.
                     _logger.Debug(LoggerContext, ex, "If everything looks good, this can be ignored.");
-		        }
-		        catch (OperationCanceledException ex)
-		        {
-		            _logger.Information(LoggerContext, ex, "Cancelled: {0}", Thread.CurrentThread.ManagedThreadId);
-		        }
-		        catch (Exception ex)
-		        {
-		            _logger.Error(LoggerContext, ex, "Session exception: {0}", ex.Message);
-		        }
+                }
+                catch (OperationCanceledException ex)
+                {
+                    _logger.Information(LoggerContext, ex, "Cancelled: {0}", Thread.CurrentThread.ManagedThreadId);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error(LoggerContext, ex, "Session exception: {0}", ex.Message);
+                }
+            }
 
-		        await Task.Run(() => StartSessionAsync(client, clientAccept, messageHandler, options, token), token);
-		    }
-		    else
-		    {
-		        _logger.Debug(LoggerContext, "Cancellation Requested for {0}", messageHandler.Method.Name);
-		    }
-		}
-	}
+            _logger.Debug(LoggerContext, "Cancellation Requested for {0}", messageHandler.Method.Name);
+        }
+    }
 }
