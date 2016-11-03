@@ -37,12 +37,12 @@ namespace HighIronRanch.Azure.ServiceBus.Test.Queues
 
 			Logger.Information("Main", "Building bus");
 			busBuilder.CreateServiceBus()
-				.WithCommandHandlers(new List<Type>() { typeof(TestCommandHandler) });
+				.WithCommandHandlers(new List<Type>() { typeof(TestCommandHandler), typeof(TestAggCommandHandler) });
 			var task = busBuilder.BuildAsync();
 			task.Wait();
 			var bus = task.Result;
 
-			Logger.Information("Main", "Ready. Press 'p' to publish an event. Press 'q' to quit.");
+			Logger.Information("Main", "Ready. Press 'p' to publish a command. Press 'a' to publish an aggregate command. Press 'q' to quit.");
 
 			while (true)
 			{
@@ -53,12 +53,20 @@ namespace HighIronRanch.Azure.ServiceBus.Test.Queues
 				{
 					var testContent = Guid.NewGuid().ToString();
 
-					Logger.Information("Main", "Publishing event for {0}", testContent);
+					Logger.Information("Main", "Publishing command for {0}", testContent);
 					bus.SendAsync(new TestCommand() { Content = testContent }).Wait();
 					Logger.Information("Main", "Published");
 				}
+                else if (key.KeyChar == 'a')
+                {
+                    var testContent = Guid.NewGuid().ToString();
 
-				Thread.Sleep(100);
+                    Logger.Information("Main", "Publishing agg command for {0}", testContent);
+                    bus.SendAsync(new TestAggCommand() { Content = testContent }).Wait();
+                    Logger.Information("Main", "Published");
+                }
+
+                Thread.Sleep(100);
 			}
 
 			Logger.Information("Main", "Cleanup");
@@ -80,6 +88,23 @@ namespace HighIronRanch.Azure.ServiceBus.Test.Queues
 		}
 	}
 
+    public class TestAggCommand : IAggregateCommand
+    {
+        public string Content;
+        public string GetAggregateId()
+        {
+            return Content;
+        }
+    }
+
+    public class TestAggCommandHandler : IAggregateCommandHandler<TestAggCommand>
+    {
+        public async Task HandleAsync(TestAggCommand message, ICommandActions actions)
+        {
+            Program.Logger.Information("TestAggCommandHandler", "Handling Agg: {0}", message.Content);
+        }
+    }
+
 	public class HandlerActivator : IHandlerActivator
 	{
 		public object GetInstance(Type type)
@@ -88,9 +113,12 @@ namespace HighIronRanch.Azure.ServiceBus.Test.Queues
 			{
 				case "TestCommandHandler":
 					return new TestCommandHandler();
-			}
 
-			throw new ArgumentException("Unknown handler to activate: " + type.Name);
+                case "TestAggCommandHandler":
+                    return new TestAggCommandHandler();
+            }
+
+            throw new ArgumentException("Unknown handler to activate: " + type.Name);
 		}
 	}
 }
