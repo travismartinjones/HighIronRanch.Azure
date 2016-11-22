@@ -38,7 +38,12 @@ namespace HighIronRanch.Azure.DocumentDb
             {
                 _logger.Debug(Common.LoggerContext, "Creating DocumentDb Client for {0}", settings.DocumentDbRepositoryEndpointUrl);
 
-                var client = new DocumentClient(new Uri(settings.DocumentDbRepositoryEndpointUrl), settings.DocumentDbRepositoryAuthKey);
+                var connectionPolicy = new ConnectionPolicy();
+                if (settings.DocumentDbRepositoryEndpointUrl.StartsWith("https://localhost"))
+                {
+                    connectionPolicy.EnableEndpointDiscovery = false;
+                }
+                var client = new DocumentClient(new Uri(settings.DocumentDbRepositoryEndpointUrl), settings.DocumentDbRepositoryAuthKey, connectionPolicy);
                 await client.OpenAsync();
 
                 await SpinUpDatabaseAsync(client, settings.DocumentDbRepositoryDatabaseId);

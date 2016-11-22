@@ -11,8 +11,8 @@ namespace HighIronRanch.Azure.DocumentDb.Test.Integration
 {
     public class DocumentDbSpecs
     {
-        [Subject(typeof(DocumentDbWritableReadModelRepository))]
-        public class Concern : Observes<DocumentDbWritableReadModelRepository>
+        [Subject(typeof(DocumentDbWritableViewModelRepository))]
+        public class Concern : Observes<DocumentDbWritableViewModelRepository>
         {
             public static readonly string TestQueueName = "TestQueueName";
 

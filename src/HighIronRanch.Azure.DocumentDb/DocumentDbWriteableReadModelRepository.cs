@@ -11,9 +11,9 @@ using Microsoft.Azure.Documents.Client;
 
 namespace HighIronRanch.Azure.DocumentDb
 {
-    public class DocumentDbWritableReadModelRepository : DocumentDbReadModelRepository, IWritableViewModelRepository
+    public class DocumentDbWritableViewModelRepository : DocumentDbViewModelRepository, IWritableViewModelRepository
     {
-        public DocumentDbWritableReadModelRepository(IDocumentDbSettings settings, IDocumentDbClientFactory clientFactory, ILogger logger)
+        public DocumentDbWritableViewModelRepository(IDocumentDbSettings settings, IDocumentDbClientFactory clientFactory, ILogger logger)
             : base(settings, clientFactory, logger)
         {
             
@@ -69,6 +69,17 @@ namespace HighIronRanch.Azure.DocumentDb
         public void Insert<T>(IEnumerable<T> items) where T : IViewModel
         {
             var task = InsertAsync(items);
+            task.Wait();
+        }
+
+        public async Task UpdateAsync<T>(T item) where T : IViewModel
+        {
+            await SaveAsync(item);
+        }
+
+        public void Update<T>(T item) where T : IViewModel
+        {
+            var task = UpdateAsync(item);
             task.Wait();
         }
 
@@ -141,6 +152,8 @@ namespace HighIronRanch.Azure.DocumentDb
             var client = await _clientFactory.GetClientAsync(_settings);
             await client.ReplaceDocumentAsync(documentLink, item);
         }
+
+        
 
         public void Truncate<T>() where T : IViewModel
         {

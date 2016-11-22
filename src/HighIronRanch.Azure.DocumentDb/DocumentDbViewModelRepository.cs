@@ -10,7 +10,7 @@ using Newtonsoft.Json;
 
 namespace HighIronRanch.Azure.DocumentDb
 {
-    public class DocumentDbReadModelRepository : IViewModelRepository
+    public class DocumentDbViewModelRepository : IViewModelRepository
     {
         protected readonly IDocumentDbSettings _settings;
         protected readonly IDocumentDbClientFactory _clientFactory;
@@ -18,7 +18,7 @@ namespace HighIronRanch.Azure.DocumentDb
 
         protected readonly IDictionary<Type, Uri> _collectionUris = new Dictionary<Type, Uri>(); 
 
-        public DocumentDbReadModelRepository(IDocumentDbSettings settings, IDocumentDbClientFactory clientFactory, ILogger logger)
+        public DocumentDbViewModelRepository(IDocumentDbSettings settings, IDocumentDbClientFactory clientFactory, ILogger logger)
         {
             _settings = settings;
             _clientFactory = clientFactory;
