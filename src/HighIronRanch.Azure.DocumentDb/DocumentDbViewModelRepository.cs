@@ -25,6 +25,14 @@ namespace HighIronRanch.Azure.DocumentDb
             _logger = logger;
         }
 
+        public class CollectionDoesNotExist : Exception
+        {
+            public CollectionDoesNotExist(Type type) : base($"Collection {type.Name} does not exist")
+            {
+                
+            }
+        }
+
         /// <summary>
         /// Verifies the collection exists and throws an exception if it does not.
         /// Marked virtual so a subclass with writing functionality could create the collection.
@@ -42,7 +50,7 @@ namespace HighIronRanch.Azure.DocumentDb
             if (collection == null)
             {
                 _logger.Error(Common.LoggerContext, "Collection {0} does not exist", typeof(T).Name);
-                throw new Exception("Collection does not exist.");
+                throw new CollectionDoesNotExist(typeof(T));
             }
         }
 
@@ -64,10 +72,17 @@ namespace HighIronRanch.Azure.DocumentDb
 
         public async Task<IQueryable<T>> GetAsync<T>() where T : IViewModel, new()
         {
-            var collectionLink = await GetCollectionLinkAsync<T>();
-            var client = await _clientFactory.GetClientAsync(_settings);
-            var queryable = client.CreateDocumentQuery<T>(collectionLink);
-            return queryable;
+            try
+            {
+                var collectionLink = await GetCollectionLinkAsync<T>();
+                var client = await _clientFactory.GetClientAsync(_settings);
+                var queryable = client.CreateDocumentQuery<T>(collectionLink);
+                return queryable;
+            }
+            catch (Exception)
+            {
+                return new List<T>().AsQueryable();
+            }
         }
 
         public IQueryable<T> Get<T>() where T : IViewModel, new()
