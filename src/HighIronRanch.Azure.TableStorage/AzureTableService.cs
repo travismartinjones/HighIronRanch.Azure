@@ -23,10 +23,16 @@ namespace HighIronRanch.Azure.TableStorage
 			return Regex.Replace(uncleanTableName, @"[^a-zA-Z0-9]", "");
 		}
 
-		public CloudTable GetTable(string tableName, bool shouldCreateIfNotExists)
-		{
-			var client = CloudStorageAccount.Parse(_appSettings.AzureStorageConnectionString).CreateCloudTableClient();
-			client.PayloadFormat = TablePayloadFormat.AtomPub;
+	    protected CloudTableClient GetClient()
+	    {
+            var client = CloudStorageAccount.Parse(_appSettings.AzureStorageConnectionString).CreateCloudTableClient();
+            //client.PayloadFormat = TablePayloadFormat.AtomPub;
+	        return client;
+	    }
+
+        public CloudTable GetTable(string tableName, bool shouldCreateIfNotExists)
+        {
+            var client = GetClient();
 
 			var cleansedTableName = CleanseTableName(tableName);
 			
