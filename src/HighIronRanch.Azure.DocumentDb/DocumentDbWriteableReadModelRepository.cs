@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using HighIronRanch.Core;
+using HighIronRanch.Core.Helpers;
 using HighIronRanch.Core.Repositories;
 using HighIronRanch.Core.Services;
 using Microsoft.Azure.Documents;
@@ -42,8 +43,7 @@ namespace HighIronRanch.Azure.DocumentDb
 
         public void Delete<T>(T item) where T : IViewModel
         {
-            var task = DeleteAsync(item);
-            task.Wait();
+            AsyncHelpers.RunSync(() => DeleteAsync(item));
         }
 
         public async Task DeleteAsync<T>(T item) where T : IViewModel
@@ -55,8 +55,7 @@ namespace HighIronRanch.Azure.DocumentDb
 
         public void Insert<T>(T item) where T : IViewModel
         {
-            var task = InsertAsync(item);
-            task.Wait();
+            AsyncHelpers.RunSync(() => InsertAsync(item));
         }
 
         public async Task InsertAsync<T>(T item) where T : IViewModel
@@ -68,8 +67,7 @@ namespace HighIronRanch.Azure.DocumentDb
 
         public void Insert<T>(IEnumerable<T> items) where T : IViewModel
         {
-            var task = InsertAsync(items);
-            task.Wait();
+            AsyncHelpers.RunSync(() => InsertAsync(items));
         }
 
         public async Task UpdateAsync<T>(T item) where T : IViewModel
@@ -79,8 +77,7 @@ namespace HighIronRanch.Azure.DocumentDb
 
         public void Update<T>(T item) where T : IViewModel
         {
-            var task = UpdateAsync(item);
-            task.Wait();
+            AsyncHelpers.RunSync(() => UpdateAsync(item));
         }
 
         public async Task InsertAsync<T>(IEnumerable<T> items) where T : IViewModel
@@ -142,8 +139,7 @@ namespace HighIronRanch.Azure.DocumentDb
 
         public void Save<T>(T item) where T : IViewModel
         {
-            var task = SaveAsync(item);
-            task.Wait();
+            AsyncHelpers.RunSync(() => SaveAsync(item));
         }
 
         public async Task SaveAsync<T>(T item) where T : IViewModel
@@ -153,12 +149,9 @@ namespace HighIronRanch.Azure.DocumentDb
             await client.ReplaceDocumentAsync(documentLink, item);
         }
 
-        
-
         public void Truncate<T>() where T : IViewModel
         {
-            var task = TruncateAsync<T>();
-            task.Wait();
+            AsyncHelpers.RunSync(() => TruncateAsync<T>());
         }
 
         public async Task TruncateAsync<T>() where T : IViewModel

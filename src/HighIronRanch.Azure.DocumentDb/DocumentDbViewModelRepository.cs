@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using HighIronRanch.Core;
+using HighIronRanch.Core.Helpers;
 using HighIronRanch.Core.Repositories;
 using HighIronRanch.Core.Services;
 using Microsoft.Azure.Documents.Client;
@@ -87,9 +89,7 @@ namespace HighIronRanch.Azure.DocumentDb
 
         public IQueryable<T> Get<T>() where T : IViewModel, new()
         {
-            var task = GetAsync<T>();
-            task.Wait();
-            return task.Result;
+            return AsyncHelpers.RunSync<IQueryable<T>>(() => GetAsync<T>());
         }
 
         public async Task<T> GetAsync<T>(Guid id) where T : IViewModel, new()
@@ -102,9 +102,8 @@ namespace HighIronRanch.Azure.DocumentDb
 
         public T Get<T>(Guid id) where T : IViewModel, new()
         {
-            var task = GetAsync<T>(id);
-            task.Wait();
-            return task.Result;
+            return AsyncHelpers.RunSync<T>(() => GetAsync<T>(id));
         }
     }
+
 }
