@@ -325,7 +325,7 @@ namespace HighIronRanch.Azure.ServiceBus
 			catch (Exception ex)
 			{
 				Console.WriteLine(" Abandoning {0}: {1}", eventToHandle.MessageId, ex.Message);
-			    await Task.Delay(100);
+			    await Task.Delay(100*eventToHandle.DeliveryCount);
 				eventToHandle.Abandon();
 			}
 		}
@@ -364,7 +364,7 @@ namespace HighIronRanch.Azure.ServiceBus
 			catch (Exception ex)
 			{
 				Console.WriteLine(" Abandoning {0}: {1}", eventToHandle.MessageId, ex.Message);
-			    await Task.Delay(100);
+			    await Task.Delay(100*eventToHandle.DeliveryCount);
 				eventToHandle.Abandon();
 			}
 		}
@@ -412,7 +412,7 @@ namespace HighIronRanch.Azure.ServiceBus
 			catch (Exception ex)
 			{
                 _logger.Warning(LoggerContext, ex, " Abandoning {0}: {1}", messageToHandle.MessageId, ex.Message);
-			    await Task.Delay(100);
+			    await Task.Delay(100*messageToHandle.DeliveryCount);
 				messageToHandle.Abandon();
 			}
 		}
