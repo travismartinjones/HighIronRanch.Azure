@@ -41,6 +41,7 @@
   <ItemGroup>
     <Compile Include="IAggregateCommand.cs" />
     <Compile Include="IAggregateCommandHandler.cs" />
+    <Compile Include="IAggregateEventHandler.cs" />
     <Compile Include="IEvent.cs" />
     <Compile Include="IEventHandler.cs" />
     <Compile Include="IHandlerActivator.cs" />

@@ -234,7 +234,9 @@ namespace HighIronRanch.Azure.ServiceBus
 
 			BrokeredMessage brokeredMessage;
 
-			if (_useJsonSerialization)
+		    var isAggregateEvent = evt is IAggregateEvent;
+
+            if (_useJsonSerialization)
 			{
 				var message = JsonConvert.SerializeObject(evt);
 				brokeredMessage = new BrokeredMessage(message);
@@ -244,6 +246,11 @@ namespace HighIronRanch.Azure.ServiceBus
 			{
 				brokeredMessage = new BrokeredMessage(evt);
 			}
+
+		    if (isAggregateEvent)
+		    {
+		        brokeredMessage.SessionId = ((IAggregateEvent) evt).GetAggregateId();
+		    }
 
 			brokeredMessage.ContentType = evt.GetType().AssemblyQualifiedName;
 
@@ -260,7 +267,7 @@ namespace HighIronRanch.Azure.ServiceBus
 				if (typeof (IAggregateCommand).IsAssignableFrom(messageType))
 				{
 #pragma warning disable 4014
-                    Task.Run(() => StartSessionAsync(client, AcceptMessageSession, HandleMessage, options, _cancellationTokenSource.Token));
+                    Task.Run(() => StartQueueSessionAsync(client, AcceptMessageQueueSession, HandleMessage, options, _cancellationTokenSource.Token));
 #pragma warning restore 4014
 
                 }
@@ -279,15 +286,20 @@ namespace HighIronRanch.Azure.ServiceBus
 				var options = new OnMessageOptions { };
 				options.MaxConcurrentCalls = 10;
 
-				var client = await _serviceBus.CreateSubscriptionClientAsync(eventType.FullName, eventType.Name);
+			    var isAggregateEvent = typeof(IAggregateEvent).IsAssignableFrom(eventType);
+
+                var client = await _serviceBus.CreateSubscriptionClientAsync(eventType.FullName, eventType.Name, isAggregateEvent);
 
 				if (_hasMultipleDeployments)
 				{
 
 #pragma warning disable 4014
-                    Task.Run(() => client.OnMessageAsync(HandleEventForMultipleDeployments, options));
+				    if (isAggregateEvent)
+				        Task.Run(() => StartSubscriptionSessionAsync(client, AcceptMessageSubscriptionSession, HandleEventForMultipleDeployments, options, _cancellationTokenSource.Token));
+				    else
+				        Task.Run(() => client.OnMessageAsync(HandleEventForMultipleDeployments, options));
 
-                    Task.Run(() =>
+				    Task.Run(() =>
                     {
                         var qclient = _queueClients[eventType];
                         qclient.OnMessageAsync(HandleMessage, options);
@@ -297,7 +309,10 @@ namespace HighIronRanch.Azure.ServiceBus
                 else
 				{
 #pragma warning disable 4014
-                    Task.Run(() => client.OnMessageAsync(HandleEvent, options));
+				    if (isAggregateEvent)
+				        Task.Run(() => StartSubscriptionSessionAsync(client, AcceptMessageSubscriptionSession, HandleEvent, options, _cancellationTokenSource.Token));
+				    else
+                        Task.Run(() => client.OnMessageAsync(HandleEvent, options));
 #pragma warning restore 4014
                 }
             }
@@ -417,37 +432,52 @@ namespace HighIronRanch.Azure.ServiceBus
 			}
 		}
 
-		internal async Task<MessageSession> AcceptMessageSession(QueueClient client)
+		internal async Task<MessageSession> AcceptMessageQueueSession(QueueClient client)
 		{
 		    return await client.AcceptMessageSessionAsync(_sessionWaitTime);
 		}
 
-	    internal async Task StartSessionAsync(QueueClient client, Func<QueueClient, Task<MessageSession>> clientAccept, Func<BrokeredMessage, Task> messageHandler, OnMessageOptions options, CancellationToken token)
+	    internal async Task<MessageSession> AcceptMessageSubscriptionSession(SubscriptionClient client)
+	    {
+	        return await client.AcceptMessageSessionAsync(_sessionWaitTime);
+	    }
+
+        internal async Task StartQueueSessionAsync(QueueClient client, Func<QueueClient, Task<MessageSession>> clientAccept, Func<BrokeredMessage, Task> messageHandler, OnMessageOptions options, CancellationToken token)
 		{
-		    while (!token.IsCancellationRequested)
-		    {
-		        try
-		        {
-		            var session = await clientAccept(client);
-		            _logger.Debug(LoggerContext, $"Session accepted: {session.SessionId}");
-		            session.OnMessageAsync(messageHandler, options);                    
-		        }
-		        catch (TimeoutException)
-		        {
-		            //_logger.Debug(LoggerContext, ex, "Session timeout: {0}", Thread.CurrentThread.ManagedThreadId);
-		            // This is normal. Any logging is noise.
-		        }
-		        catch (OperationCanceledException ex)
-		        {
-		            _logger.Information(LoggerContext, ex, "Cancelled: {0}", Thread.CurrentThread.ManagedThreadId);
-		        }
-		        catch (Exception ex)
-		        {
-		            _logger.Error(LoggerContext, ex, "Session exception: {0}", ex.Message);
-		        }
-		    }
-		    
-		    _logger.Debug(LoggerContext, "Cancellation Requested for {0}", messageHandler.Method.Name);		    
-		}
-	}
+		    await StartSessionAsync(client, clientAccept, messageHandler, options, token);
+        }
+
+	    internal async Task StartSubscriptionSessionAsync(SubscriptionClient client, Func<SubscriptionClient, Task<MessageSession>> clientAccept, Func<BrokeredMessage, Task> messageHandler, OnMessageOptions options, CancellationToken token)
+	    {
+	        await StartSessionAsync(client, clientAccept, messageHandler, options, token);
+	    }
+
+	    internal async Task StartSessionAsync<T>(T client, Func<T, Task<MessageSession>> clientAccept, Func<BrokeredMessage, Task> messageHandler, OnMessageOptions options, CancellationToken token)
+	    {
+	        while (!token.IsCancellationRequested)
+	        {
+	            try
+	            {
+	                var session = await clientAccept(client);
+	                _logger.Debug(LoggerContext, $"Session accepted: {session.SessionId}");
+	                session.OnMessageAsync(messageHandler, options);
+	            }
+	            catch (TimeoutException)
+	            {
+	                //_logger.Debug(LoggerContext, ex, "Session timeout: {0}", Thread.CurrentThread.ManagedThreadId);
+	                // This is normal. Any logging is noise.
+	            }
+	            catch (OperationCanceledException ex)
+	            {
+	                _logger.Information(LoggerContext, ex, "Cancelled: {0}", Thread.CurrentThread.ManagedThreadId);
+	            }
+	            catch (Exception ex)
+	            {
+	                _logger.Error(LoggerContext, ex, "Session exception: {0}", ex.Message);
+	            }
+	        }
+
+	        _logger.Debug(LoggerContext, "Cancellation Requested for {0}", messageHandler.Method.Name);
+	    }
+    }
 }

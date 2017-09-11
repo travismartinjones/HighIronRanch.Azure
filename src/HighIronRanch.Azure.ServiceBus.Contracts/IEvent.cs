@@ -7,4 +7,9 @@ namespace HighIronRanch.Azure.ServiceBus.Contracts
         // a unique id to prevent duplicate publication of the same event
         Guid MessageId { get; }
 	}
+
+    public interface IAggregateEvent : IEvent
+    {
+        string GetAggregateId();
+    }
 }
