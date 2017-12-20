@@ -28,6 +28,7 @@ namespace HighIronRanch.Azure.ServiceBus
 		private readonly IHandlerActivator _handlerActivator;
 		private readonly ILogger _logger;
         protected CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
+        private static ConcurrentDictionary<string, MessageSession> _sessions = new ConcurrentDictionary<string, MessageSession>();
 
 		// ICommand, QueueClient
 		protected readonly IDictionary<Type, QueueClient> _queueClients = new ConcurrentDictionary<Type, QueueClient>();
@@ -267,7 +268,7 @@ namespace HighIronRanch.Azure.ServiceBus
 				if (typeof (IAggregateCommand).IsAssignableFrom(messageType))
 				{
 #pragma warning disable 4014
-                    Task.Run(() => StartQueueSessionAsync(client, AcceptMessageQueueSession, HandleMessage, options, _cancellationTokenSource.Token));
+                    Task.Run(async () => await StartQueueSessionAsync(client, AcceptMessageQueueSession, HandleMessage, options, _cancellationTokenSource.Token));
 #pragma warning restore 4014
 
                 }
@@ -295,7 +296,7 @@ namespace HighIronRanch.Azure.ServiceBus
 
 #pragma warning disable 4014
 				    if (isAggregateEvent)
-				        Task.Run(() => StartSubscriptionSessionAsync(client, AcceptMessageSubscriptionSession, HandleEventForMultipleDeployments, options, _cancellationTokenSource.Token));
+				        Task.Run(async () => await StartSubscriptionSessionAsync(client, AcceptMessageSubscriptionSession, HandleEventForMultipleDeployments, options, _cancellationTokenSource.Token));
 				    else
 				        Task.Run(() => client.OnMessageAsync(HandleEventForMultipleDeployments, options));
 
@@ -310,7 +311,10 @@ namespace HighIronRanch.Azure.ServiceBus
 				{
 #pragma warning disable 4014
 				    if (isAggregateEvent)
-				        Task.Run(() => StartSubscriptionSessionAsync(client, AcceptMessageSubscriptionSession, HandleEvent, options, _cancellationTokenSource.Token));
+				        Task.Run(async () =>
+				        {
+				            await StartSubscriptionSessionAsync(client, AcceptMessageSubscriptionSession, HandleEvent, options, _cancellationTokenSource.Token);
+				        });
 				    else
                         Task.Run(() => client.OnMessageAsync(HandleEvent, options));
 #pragma warning restore 4014
@@ -339,7 +343,7 @@ namespace HighIronRanch.Azure.ServiceBus
 			}
 			catch (Exception ex)
 			{
-				Console.WriteLine(" Abandoning {0}: {1}", eventToHandle.MessageId, ex.Message);
+			    _logger.Error("ServiceBusWithHandlers", ex, " Abandoning {0}: {1}", eventToHandle.MessageId, ex.Message);
 			    await Task.Delay(100*eventToHandle.DeliveryCount);
 				eventToHandle.Abandon();
 			}
@@ -347,41 +351,41 @@ namespace HighIronRanch.Azure.ServiceBus
 
 		private async Task HandleEvent(BrokeredMessage eventToHandle)
 		{
-			try
-			{
-				var eventType = Type.GetType(eventToHandle.ContentType);
+		    try
+		    {
+		        var eventType = Type.GetType(eventToHandle.ContentType);
 
-                _logger.Debug(LoggerContext, "Handling event {0}", eventType.Name);
+		        _logger.Debug(LoggerContext, "Handling event {0}", eventType.Name);
 
-				object message;
-				if (_useJsonSerialization)
-				{
-					message = JsonConvert.DeserializeObject(eventToHandle.GetBody<string>(), eventType);
-				}
-				else
-				{
-					message = eventToHandle.GetType()
-								.GetMethod("GetBody", new Type[] { })
-								.MakeGenericMethod(eventType)
-								.Invoke(eventToHandle, new object[] { });
-				}
+		        object message;
+		        if (_useJsonSerialization)
+		        {
+		            message = JsonConvert.DeserializeObject(eventToHandle.GetBody<string>(), eventType);
+		        }
+		        else
+		        {
+		            message = eventToHandle.GetType()
+		                .GetMethod("GetBody", new Type[] { })
+		                .MakeGenericMethod(eventType)
+		                .Invoke(eventToHandle, new object[] { });
+		        }
 
-				var handlerTypes = _eventHandlers[eventType];
-				foreach (var handlerType in handlerTypes)
-				{
-					var handler = _handlerActivator.GetInstance(handlerType);
-					var handleMethodInfo = handlerType.GetMethod("HandleAsync", new[] { eventType });
-					await (Task)handleMethodInfo.Invoke(handler, new[] { message });
-				}
+		        var handlerTypes = _eventHandlers[eventType];
+		        foreach (var handlerType in handlerTypes)
+		        {
+		            var handler = _handlerActivator.GetInstance(handlerType);
+		            var handleMethodInfo = handlerType.GetMethod("HandleAsync", new[] {eventType});
+		            if (handleMethodInfo == null) continue;
+		            ((Task) handleMethodInfo.Invoke(handler, new[] {message})).Wait();
+		        }
 
-				eventToHandle.Complete();
-			}
-			catch (Exception ex)
-			{
-				Console.WriteLine(" Abandoning {0}: {1}", eventToHandle.MessageId, ex.Message);
-			    await Task.Delay(100*eventToHandle.DeliveryCount);
-				eventToHandle.Abandon();
-			}
+		        eventToHandle.Complete();
+		    }
+		    catch (Exception ex)
+		    {
+		        _logger.Warning(LoggerContext, ex, " Abandoning {0}: {1}", eventToHandle.MessageId, ex.Message);
+		        _sessions[eventToHandle.SessionId].Abort();
+		    }
 		}
 
 		private async Task HandleMessage(BrokeredMessage messageToHandle)
@@ -402,7 +406,7 @@ namespace HighIronRanch.Azure.ServiceBus
 								.MakeGenericMethod(messageType)
 								.Invoke(messageToHandle, new object[] {});
 				}
-
+                
 				if (messageType.DoesTypeImplementInterface(typeof(IEvent)))
 				{
 					var handlerTypes = _eventHandlers[messageType];
@@ -456,10 +460,12 @@ namespace HighIronRanch.Azure.ServiceBus
 	    {
 	        while (!token.IsCancellationRequested)
 	        {
+	            MessageSession session = null;
 	            try
 	            {
-	                var session = await clientAccept(client);
-	                _logger.Debug(LoggerContext, $"Session accepted: {session.SessionId}");
+	                session = await clientAccept(client);
+	                _sessions[session.SessionId] = session;
+                    _logger.Debug(LoggerContext, $"Session accepted: {session.SessionId}");                    
 	                session.OnMessageAsync(messageHandler, options);
 	            }
 	            catch (TimeoutException)
@@ -473,7 +479,7 @@ namespace HighIronRanch.Azure.ServiceBus
 	            }
 	            catch (Exception ex)
 	            {
-	                _logger.Error(LoggerContext, ex, "Session exception: {0}", ex.Message);
+	                _logger.Error(LoggerContext, ex, "Session exception: {0}", ex.Message);                    
 	            }
 	        }
 
