@@ -23,6 +23,8 @@ namespace HighIronRanch.Azure.ServiceBus
         Task DeleteTopicAsync(string name);
         Task<SubscriptionClient> CreateSubscriptionClientAsync(string topicName, string subscriptionName, bool isSessionRequired);
         Task DeleteSubscriptionAsync(string topicName, string subscriptionName);
+        Task<long> GetQueueLengthAsync(string name);
+        Task<long> GetTopicLengthAsync(string name);
     }
 
     public class ServiceBus : IServiceBus
@@ -164,6 +166,18 @@ namespace HighIronRanch.Azure.ServiceBus
             var cleansedTopicName = CreateTopicName(topicName);
             var cleansedSubscriptionName = CreateSubscriptionName(subscriptionName);
             await _manager.DeleteSubscriptionAsync(cleansedTopicName, cleansedSubscriptionName);
+        }
+
+        public async Task<long> GetQueueLengthAsync(string name)
+        {
+            var queue = await _manager.GetQueueAsync(CreateQueueName(name));
+            return queue.MessageCountDetails.ActiveMessageCount;
+        }
+
+        public async Task<long> GetTopicLengthAsync(string name)
+        {
+            var topic = await _manager.GetTopicAsync(CreateTopicName(name));
+            return topic.MessageCountDetails.ActiveMessageCount;
         }
     }
 }

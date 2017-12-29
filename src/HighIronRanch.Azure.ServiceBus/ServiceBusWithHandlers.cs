@@ -16,6 +16,7 @@ namespace HighIronRanch.Azure.ServiceBus
 		void UseJsonMessageSerialization(bool useJsonSerialization);
 		Task SendAsync(ICommand command, DateTime? enqueueTime = null);
 		Task PublishAsync(IEvent evt);
+	    Task<long> GetMessageCount(Type type);
 	}
 
 	public class ServiceBusWithHandlers : IServiceBusWithHandlers
@@ -152,7 +153,7 @@ namespace HighIronRanch.Azure.ServiceBus
 		{
 			var isCommand = command is IAggregateCommand;
 			var client = _queueClients[command.GetType()];            
-
+            
 			BrokeredMessage brokeredMessage;
 
 			if (_useJsonSerialization)
@@ -259,7 +260,22 @@ namespace HighIronRanch.Azure.ServiceBus
 			await client.SendAsync(brokeredMessage);
 		}
 
-		internal async Task StartHandlers()
+	    public async Task<long> GetMessageCount(Type type)
+	    {
+	        if (type.DoesTypeImplementInterface(typeof(ICommand)))
+	        {
+	            return await _serviceBus.GetQueueLengthAsync(type.FullName);
+	        }
+
+	        if (type.DoesTypeImplementInterface(typeof(ICommand)))
+	        {
+	            return await _serviceBus.GetTopicLengthAsync(type.FullName);
+	        }
+
+	        return 0;
+	    }
+
+	    internal async Task StartHandlers()
 		{
 			foreach (var messageType in _queueHandlers.Keys)
 			{
