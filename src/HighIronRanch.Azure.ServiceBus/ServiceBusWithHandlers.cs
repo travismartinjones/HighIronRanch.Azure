@@ -275,7 +275,7 @@ namespace HighIronRanch.Azure.ServiceBus
 				if (typeof (IAggregateCommand).IsAssignableFrom(messageType))
 				{
 #pragma warning disable 4014
-                    Task.Run(() => StartQueueSessionAsync(client, AcceptMessageQueueSession, HandleMessage, options, _cancellationTokenSource.Token));
+                    Task.Run(async () => await StartQueueSessionAsync(client, AcceptMessageQueueSession, HandleMessage, options, _cancellationTokenSource.Token));
 #pragma warning restore 4014
 
                 }
@@ -306,7 +306,7 @@ namespace HighIronRanch.Azure.ServiceBus
 
 #pragma warning disable 4014
 				    if (isAggregateEvent)
-				        Task.Run(() => StartSubscriptionSessionAsync(client, AcceptMessageSubscriptionSession, HandleEventForMultipleDeployments, options, _cancellationTokenSource.Token));
+				        Task.Run(async () => await StartSubscriptionSessionAsync(client, AcceptMessageSubscriptionSession, HandleEventForMultipleDeployments, options, _cancellationTokenSource.Token));
 				    else
 				        Task.Run(() => client.OnMessageAsync(HandleEventForMultipleDeployments, options));
 
@@ -321,9 +321,9 @@ namespace HighIronRanch.Azure.ServiceBus
 				{
 #pragma warning disable 4014
 				    if (isAggregateEvent)
-				        Task.Run(() =>
+				        Task.Run(async () =>
 				        {
-				            StartSubscriptionSessionAsync(client, AcceptMessageSubscriptionSession, HandleEvent, options, _cancellationTokenSource.Token);
+				            await StartSubscriptionSessionAsync(client, AcceptMessageSubscriptionSession, HandleEvent, options, _cancellationTokenSource.Token);
 				        });
 				    else
                         Task.Run(() => client.OnMessageAsync(HandleEvent, options));
@@ -335,8 +335,8 @@ namespace HighIronRanch.Azure.ServiceBus
 		private async Task HandleEventForMultipleDeployments(BrokeredMessage eventToHandle)
 		{
 			try
-			{
-				var eventType = Type.GetType(eventToHandle.ContentType);
+			{			    
+                var eventType = Type.GetType(eventToHandle.ContentType);
 				// Should be using json serialization
 				var theEvent = JsonConvert.DeserializeObject(eventToHandle.GetBody<string>(), eventType);
 
@@ -354,8 +354,8 @@ namespace HighIronRanch.Azure.ServiceBus
 			catch (Exception ex)
 			{
 			    _logger.Error("ServiceBusWithHandlers", ex, " Abandoning {0}: {1}", eventToHandle.MessageId, ex.Message);
-			    await Task.Delay(100*eventToHandle.DeliveryCount);
-				eventToHandle.Abandon();
+			    await Task.Delay((int)(100 * Math.Pow(eventToHandle.DeliveryCount, 2)));
+                eventToHandle.Abandon();
 			}
 		}
 
@@ -385,14 +385,15 @@ namespace HighIronRanch.Azure.ServiceBus
 		            var handler = _handlerActivator.GetInstance(handlerType);
 		            var handleMethodInfo = handlerType.GetMethod("HandleAsync", new[] {eventType});
 		            if (handleMethodInfo == null) continue;
-		            ((Task) handleMethodInfo.Invoke(handler, new[] {message})).Wait();
+		            _logger.Information(LoggerContext, "Handling Event {0} {1}", eventType, handlerType);
+                    await ((Task) handleMethodInfo.Invoke(handler, new[] {message}));
 		        }
 
 		        eventToHandle.Complete();
 		    }
 		    catch (Exception ex)
 		    {		        
-		        await Task.Delay(100 * eventToHandle.DeliveryCount);
+		        await Task.Delay((int)(100 * Math.Pow(eventToHandle.DeliveryCount,2)));
 		        eventToHandle.Abandon();		        
 		    }
 		}
@@ -402,8 +403,7 @@ namespace HighIronRanch.Azure.ServiceBus
 			try
 			{
 				var messageType = Type.GetType(messageToHandle.ContentType);
-
-                _logger.Warning(LoggerContext, "HandleMessage Handling {0}{1}: {2}", messageType, messageToHandle.MessageId, messageToHandle.SequenceNumber);
+                
                 object message;
 				if (_useJsonSerialization)
 				{
@@ -424,7 +424,8 @@ namespace HighIronRanch.Azure.ServiceBus
 					{
 						var handler = _handlerActivator.GetInstance(handlerType);
 						var handleMethodInfo = handlerType.GetMethod("HandleAsync", new[] { messageType });
-						await (Task)handleMethodInfo.Invoke(handler, new[] { message });
+					    _logger.Information(LoggerContext, "Handling Command {0} {1}", messageType, handlerType);
+                        await (Task)handleMethodInfo.Invoke(handler, new[] { message });
 					}
 				}
 				else
@@ -433,14 +434,14 @@ namespace HighIronRanch.Azure.ServiceBus
 					var handler = _handlerActivator.GetInstance(handlerType);
 
 					var handleMethodInfo = handlerType.GetMethod("HandleAsync", new[] { messageType, typeof(ICommandActions) });
-					((Task)handleMethodInfo?.Invoke(handler, new[] { message, new CommandActions(messageToHandle) }))?.Wait();
+					await ((Task)handleMethodInfo?.Invoke(handler, new[] { message, new CommandActions(messageToHandle) }));
 				}
 				messageToHandle.Complete();
 			}
 			catch (Exception ex)
-			{                
-                await Task.Delay(100*messageToHandle.DeliveryCount);
-				messageToHandle.Abandon();                
+			{
+                await Task.Delay((int)(100 * Math.Pow(messageToHandle.DeliveryCount, 2)));
+                messageToHandle.Abandon();                
 			}
 		}
 
