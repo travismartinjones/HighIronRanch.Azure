@@ -59,6 +59,7 @@
     <Compile Include="ServiceBus.cs" />
     <Compile Include="ServiceBusWithHandlers.cs" />
     <Compile Include="ServiceBusWithHandlersBuilder.cs" />
+    <Compile Include="SessionAttribute.cs" />
     <Compile Include="TypeExtensions.cs" />
   </ItemGroup>
   <ItemGroup>

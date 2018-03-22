@@ -11,7 +11,7 @@ using Newtonsoft.Json;
 
 namespace HighIronRanch.Azure.ServiceBus
 {
-	public interface IServiceBusWithHandlers : IDisposable
+    public interface IServiceBusWithHandlers : IDisposable
 	{
 		void UseJsonMessageSerialization(bool useJsonSerialization);
 		Task SendAsync(ICommand command, DateTime? enqueueTime = null);
@@ -41,7 +41,7 @@ namespace HighIronRanch.Azure.ServiceBus
  
 		// IEvent, ISet<IEventHandler>
 		protected readonly IDictionary<Type, ISet<Type>> _eventHandlers = new ConcurrentDictionary<Type, ISet<Type>>();
-	    private readonly TimeSpan _sessionWaitTime = new TimeSpan(0, 0, 2);
+	    private readonly TimeSpan _defaultSessionWaitTime = new TimeSpan(0, 0, 2);
 
 	    public ServiceBusWithHandlers(IServiceBus serviceBus, IHandlerActivator handlerActivator, ILogger logger)
 		{
@@ -64,7 +64,7 @@ namespace HighIronRanch.Azure.ServiceBus
 		{
             // stop the handlers
             _cancellationTokenSource.Cancel();
-            Thread.Sleep(_sessionWaitTime);
+            Thread.Sleep(_defaultSessionWaitTime);
 
             if (!disposing)
 			{
@@ -263,6 +263,14 @@ namespace HighIronRanch.Azure.ServiceBus
 	        return 0;
 	    }
 
+	    private TimeSpan GetWaitTimeForType(Type messageType)
+	    {
+	        var sessionAttribute = (SessionAttribute)Attribute.GetCustomAttribute(messageType, typeof(SessionAttribute));
+	        if (sessionAttribute == null)
+	            return _defaultSessionWaitTime;
+            return new TimeSpan(0,0,sessionAttribute.TimeoutSeconds);
+	    }
+
 	    internal async Task StartHandlers()
 		{
 			foreach (var messageType in _queueHandlers.Keys)
@@ -275,7 +283,7 @@ namespace HighIronRanch.Azure.ServiceBus
 				if (typeof (IAggregateCommand).IsAssignableFrom(messageType))
 				{
 #pragma warning disable 4014
-                    Task.Run(async () => await StartQueueSessionAsync(client, AcceptMessageQueueSession, HandleMessage, options, _cancellationTokenSource.Token));
+                    Task.Run(async () => await StartQueueSessionAsync(client, s => AcceptMessageQueueSession(s, GetWaitTimeForType(messageType)), HandleMessage, options, _cancellationTokenSource.Token));
 #pragma warning restore 4014
 
                 }
@@ -306,7 +314,7 @@ namespace HighIronRanch.Azure.ServiceBus
 
 #pragma warning disable 4014
 				    if (isAggregateEvent)
-				        Task.Run(async () => await StartSubscriptionSessionAsync(client, AcceptMessageSubscriptionSession, HandleEventForMultipleDeployments, options, _cancellationTokenSource.Token));
+				        Task.Run(async () => await StartSubscriptionSessionAsync(client, s => AcceptMessageSubscriptionSession(s,GetWaitTimeForType(eventType)), HandleEventForMultipleDeployments, options, _cancellationTokenSource.Token));
 				    else
 				        Task.Run(() => client.OnMessageAsync(HandleEventForMultipleDeployments, options));
 
@@ -323,7 +331,7 @@ namespace HighIronRanch.Azure.ServiceBus
 				    if (isAggregateEvent)
 				        Task.Run(async () =>
 				        {
-				            await StartSubscriptionSessionAsync(client, AcceptMessageSubscriptionSession, HandleEvent, options, _cancellationTokenSource.Token);
+				            await StartSubscriptionSessionAsync(client, s => AcceptMessageSubscriptionSession(s, GetWaitTimeForType(eventType)), HandleEvent, options, _cancellationTokenSource.Token);
 				        });
 				    else
                         Task.Run(() => client.OnMessageAsync(HandleEvent, options));
@@ -445,14 +453,14 @@ namespace HighIronRanch.Azure.ServiceBus
 			}
 		}
 
-		internal async Task<MessageSession> AcceptMessageQueueSession(QueueClient client)
+		internal async Task<MessageSession> AcceptMessageQueueSession(QueueClient client, TimeSpan sessionWaitTime)
 		{
-		    return await client.AcceptMessageSessionAsync(_sessionWaitTime);
+		    return await client.AcceptMessageSessionAsync(sessionWaitTime);
 		}
 
-	    internal async Task<MessageSession> AcceptMessageSubscriptionSession(SubscriptionClient client)
+	    internal async Task<MessageSession> AcceptMessageSubscriptionSession(SubscriptionClient client, TimeSpan sessionWaitTime)
 	    {
-	        return await client.AcceptMessageSessionAsync(_sessionWaitTime);
+	        return await client.AcceptMessageSessionAsync(sessionWaitTime);
 	    }
 
         internal async Task StartQueueSessionAsync(QueueClient client, Func<QueueClient, Task<MessageSession>> clientAccept, Func<BrokeredMessage, Task> messageHandler, OnMessageOptions options, CancellationToken token)
