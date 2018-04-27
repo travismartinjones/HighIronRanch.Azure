@@ -337,7 +337,7 @@ namespace HighIronRanch.Azure.ServiceBus
 
 	    public async Task StartHandlers()
 		{
-		    var commandSessionHandlerFactory = new CommandSessionHandlerFactory(_handlerActivator, _eventHandlers, _queueHandlers, _logger, LoggerContext, _useJsonSerialization);
+		    var commandSessionHandlerFactory = new CommandSessionHandlerFactory(_handlerActivator, _queueHandlers, _logger, LoggerContext, _useJsonSerialization);
             var eventSessionHandlerFactory = new EventSessionHandlerFactory(_handlerActivator, _eventHandlers, _queueHandlers, _logger, LoggerContext, _useJsonSerialization);
 
 #pragma warning disable 4014
@@ -369,8 +369,7 @@ namespace HighIronRanch.Azure.ServiceBus
 
 		                    Task.Run(() =>
 		                    {
-		                        var commandHandler = new BusCommandHandler(_handlerActivator, _eventHandlers,
-		                            _queueHandlers, _logger,
+		                        var commandHandler = new BusCommandHandler(_handlerActivator, _queueHandlers, _logger,
 		                            LoggerContext, _useJsonSerialization);
 		                        client.OnMessageAsync(async c => await commandHandler.OnMessageAsync(null, c), options);
 		                    });
@@ -416,8 +415,7 @@ namespace HighIronRanch.Azure.ServiceBus
 		                    Task.Run(() =>
 		                    {
 		                        var qclient = _queueClients[eventType];
-		                        var eventHandler = new BusEventHandler(_handlerActivator, _eventHandlers, _queueHandlers,
-		                            _logger,
+		                        var eventHandler = new BusEventHandler(_handlerActivator, _eventHandlers, _logger,
 		                            LoggerContext, _useJsonSerialization);
 		                        qclient.OnMessageAsync(async e => await eventHandler.OnMessageAsync(null, e), options);
 		                    });
@@ -436,8 +434,7 @@ namespace HighIronRanch.Azure.ServiceBus
 		                    }
 		                    else
 		                    {
-		                        var eventHandler = new BusEventHandler(_handlerActivator, _eventHandlers, _queueHandlers,
-		                            _logger,
+		                        var eventHandler = new BusEventHandler(_handlerActivator, _eventHandlers, _logger,
 		                            LoggerContext, _useJsonSerialization);
 		                        Task.Run(() =>
 		                            client.OnMessageAsync(async e => await eventHandler.OnMessageAsync(null, e), options));

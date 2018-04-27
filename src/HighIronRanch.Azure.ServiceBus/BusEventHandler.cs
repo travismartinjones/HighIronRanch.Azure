@@ -13,7 +13,6 @@ namespace HighIronRanch.Azure.ServiceBus
     {
         private readonly IHandlerActivator _handlerActivator;
         private readonly IDictionary<Type, ISet<Type>> _eventHandlers;
-        private readonly IDictionary<Type, Type> _queueHandlers;
         private readonly ILogger _logger;
         private readonly string _loggerContext;
         private readonly bool _useJsonSerialization;
@@ -22,14 +21,12 @@ namespace HighIronRanch.Azure.ServiceBus
         public BusEventHandler(
             IHandlerActivator handlerActivator,
             IDictionary<Type, ISet<Type>> eventHandlers,
-            IDictionary<Type, Type> queueHandlers,
             ILogger logger,
             string loggerContext,
             bool useJsonSerialization)
         {
             _handlerActivator = handlerActivator;
             _eventHandlers = eventHandlers;
-            _queueHandlers = queueHandlers;
             _logger = logger;
             _loggerContext = loggerContext;
             _useJsonSerialization = useJsonSerialization;

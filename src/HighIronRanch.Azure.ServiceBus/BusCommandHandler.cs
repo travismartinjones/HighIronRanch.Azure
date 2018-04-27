@@ -12,7 +12,6 @@ namespace HighIronRanch.Azure.ServiceBus
     internal class BusCommandHandler : IMessageSessionAsyncHandler
     {
         private readonly IHandlerActivator _handlerActivator;
-        private readonly IDictionary<Type, ISet<Type>> _eventHandlers;
         private readonly IDictionary<Type, Type> _queueHandlers;
         private readonly ILogger _logger;
         private readonly string _loggerContext;
@@ -21,14 +20,12 @@ namespace HighIronRanch.Azure.ServiceBus
 
         public BusCommandHandler(
             IHandlerActivator handlerActivator,
-            IDictionary<Type, ISet<Type>> eventHandlers,
             IDictionary<Type, Type> queueHandlers,
             ILogger logger,
             string loggerContext,
             bool useJsonSerialization)
         {
             _handlerActivator = handlerActivator;
-            _eventHandlers = eventHandlers;
             _queueHandlers = queueHandlers;
             _logger = logger;
             _loggerContext = loggerContext;

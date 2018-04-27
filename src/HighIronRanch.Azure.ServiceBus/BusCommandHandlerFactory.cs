@@ -9,7 +9,6 @@ namespace HighIronRanch.Azure.ServiceBus
     internal class CommandSessionHandlerFactory : IMessageSessionAsyncHandlerFactory
     {
         private readonly IHandlerActivator _handlerActivator;
-        private readonly IDictionary<Type, ISet<Type>> _eventHandlers;
         private readonly IDictionary<Type, Type> _queueHandlers;
         private readonly ILogger _logger;
         private readonly string _loggerContext;
@@ -17,7 +16,6 @@ namespace HighIronRanch.Azure.ServiceBus
 
         public CommandSessionHandlerFactory(
             IHandlerActivator handlerActivator,
-            IDictionary<Type, ISet<Type>> eventHandlers,
             IDictionary<Type, Type> queueHandlers,
             ILogger logger,
             string loggerContext,
@@ -25,7 +23,6 @@ namespace HighIronRanch.Azure.ServiceBus
         )
         {
             _handlerActivator = handlerActivator;
-            _eventHandlers = eventHandlers;
             _queueHandlers = queueHandlers;
             _logger = logger;
             _loggerContext = loggerContext;
@@ -36,7 +33,6 @@ namespace HighIronRanch.Azure.ServiceBus
         {
             return new BusCommandHandler(
                 _handlerActivator,
-                _eventHandlers,
                 _queueHandlers,
                 _logger,
                 _loggerContext,
