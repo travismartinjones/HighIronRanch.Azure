@@ -11,18 +11,11 @@ using Newtonsoft.Json;
 
 namespace HighIronRanch.Azure.ServiceBus
 {
-    public interface IServiceBusWithHandlers : IDisposable
-	{
-		void UseJsonMessageSerialization(bool useJsonSerialization);
-		Task SendAsync(ICommand command, DateTime? enqueueTime = null);
-		Task PublishAsync(IEvent evt);
-	    Task<long> GetMessageCount(Type type);
-	}
-
-	public class ServiceBusWithHandlers : IServiceBusWithHandlers
+    public class ServiceBusWithHandlers : IServiceBusWithHandlers
 	{
 		public static readonly string LoggerContext = "HighIronRanch.Azure.ServiceBus";
 
+	    private static int MessagePrefetchSize = 100;
 		private readonly IServiceBus _serviceBus;
 		private bool _hasMultipleDeployments = true;
 		private bool _useJsonSerialization = true;
@@ -41,7 +34,7 @@ namespace HighIronRanch.Azure.ServiceBus
  
 		// IEvent, ISet<IEventHandler>
 		protected readonly IDictionary<Type, ISet<Type>> _eventHandlers = new ConcurrentDictionary<Type, ISet<Type>>();
-	    private readonly TimeSpan _defaultSessionWaitTime = new TimeSpan(0, 0, 2);
+	    private readonly TimeSpan _defaultSessionWaitTime = new TimeSpan(0, 0, 60);
 
 	    public ServiceBusWithHandlers(IServiceBus serviceBus, IHandlerActivator handlerActivator, ILogger logger)
 		{
@@ -116,9 +109,8 @@ namespace HighIronRanch.Azure.ServiceBus
 
 			_logger.Information(LoggerContext, "Creating {0} queue for {1}", isCommand ? "command" : "message", type);
 
-			var client = await _serviceBus.CreateQueueClientAsync(type.FullName, isCommand);
-
-			_queueClients.Add(type, client);
+			var client = await _serviceBus.CreateQueueClientAsync(type.FullName, isCommand);		    
+		    _queueClients.Add(type, client);
 		}
 
 		internal async Task CreateHandledQueueAsync(Type handlerType)
@@ -146,8 +138,7 @@ namespace HighIronRanch.Azure.ServiceBus
 			if (_useJsonSerialization)
 			{
 				var message = JsonConvert.SerializeObject(command);
-				brokeredMessage = new BrokeredMessage(message);
-				brokeredMessage.MessageId = command.MessageId.ToString();
+			    brokeredMessage = new BrokeredMessage(message) {MessageId = command.MessageId.ToString()};
 			}
 			else
 			{
@@ -169,7 +160,7 @@ namespace HighIronRanch.Azure.ServiceBus
 		    {
 		        await client.SendAsync(brokeredMessage);
 		    }
-		    catch (Exception ex)
+		    catch (Exception)
 		    {
 		        _logger.Error(LoggerContext, "Sending command {0}", command.GetType().ToString());
 		    }
@@ -184,8 +175,7 @@ namespace HighIronRanch.Azure.ServiceBus
 
 			_logger.Information(LoggerContext, "Creating topic for {0}", type);
 
-			var client = await _serviceBus.CreateTopicClientAsync(type.FullName);
-
+			var client = await _serviceBus.CreateTopicClientAsync(type.FullName);            
 			_topicClients.Add(type, client);
 
 			// Create queues for the events in a multiple deployment environment
@@ -228,8 +218,7 @@ namespace HighIronRanch.Azure.ServiceBus
             if (_useJsonSerialization)
 			{
 				var message = JsonConvert.SerializeObject(evt);
-				brokeredMessage = new BrokeredMessage(message);
-				brokeredMessage.MessageId = evt.MessageId.ToString();
+			    brokeredMessage = new BrokeredMessage(message) {MessageId = evt.MessageId.ToString()};
 			}
 			else
 			{
@@ -263,197 +252,15 @@ namespace HighIronRanch.Azure.ServiceBus
 	        return 0;
 	    }
 
-	    private TimeSpan GetWaitTimeForType(Type messageType)
-	    {
-	        var sessionAttribute = (SessionAttribute)Attribute.GetCustomAttribute(messageType, typeof(SessionAttribute));
-	        if (sessionAttribute == null)
-	            return _defaultSessionWaitTime;
-            return new TimeSpan(0,0,sessionAttribute.TimeoutSeconds);
-	    }
+        private TimeSpan GetWaitTimeForType(Type messageType)
+        {
+            var sessionAttribute = (SessionAttribute)Attribute.GetCustomAttribute(messageType, typeof(SessionAttribute));
+            if (sessionAttribute == null)
+                return _defaultSessionWaitTime;
+            return new TimeSpan(0, 0, sessionAttribute.TimeoutSeconds);
+        }
 
-	    internal async Task StartHandlers()
-		{
-			foreach (var messageType in _queueHandlers.Keys)
-			{
-				var options = new OnMessageOptions
-				{
-				    AutoComplete = false
-				};
-				var client = _queueClients[messageType];
-				if (typeof (IAggregateCommand).IsAssignableFrom(messageType))
-				{
-#pragma warning disable 4014
-                    Task.Run(async () => await StartQueueSessionAsync(client, s => AcceptMessageQueueSession(s, GetWaitTimeForType(messageType)), HandleMessage, options, _cancellationTokenSource.Token));
-#pragma warning restore 4014
-
-                }
-                else
-				{
-					options.MaxConcurrentCalls = 10;
-#pragma warning disable 4014
-                    Task.Run(() => client.OnMessageAsync(HandleMessage, options));
-#pragma warning restore 4014
-
-                }
-            }
-
-			foreach (var eventType in _eventHandlers.Keys)
-			{
-				var options = new OnMessageOptions
-				{
-				    AutoComplete = false
-                };
-				options.MaxConcurrentCalls = 10;
-
-			    var isAggregateEvent = typeof(IAggregateEvent).IsAssignableFrom(eventType);
-
-                var client = await _serviceBus.CreateSubscriptionClientAsync(eventType.FullName, eventType.Name, isAggregateEvent);
-
-				if (_hasMultipleDeployments)
-				{
-
-#pragma warning disable 4014
-				    if (isAggregateEvent)
-				        Task.Run(async () => await StartSubscriptionSessionAsync(client, s => AcceptMessageSubscriptionSession(s,GetWaitTimeForType(eventType)), HandleEventForMultipleDeployments, options, _cancellationTokenSource.Token));
-				    else
-				        Task.Run(() => client.OnMessageAsync(HandleEventForMultipleDeployments, options));
-
-				    Task.Run(() =>
-                    {
-                        var qclient = _queueClients[eventType];
-                        qclient.OnMessageAsync(HandleMessage, options);
-                    });
-#pragma warning restore 4014
-                }
-                else
-				{
-#pragma warning disable 4014
-				    if (isAggregateEvent)
-				        Task.Run(async () =>
-				        {
-				            await StartSubscriptionSessionAsync(client, s => AcceptMessageSubscriptionSession(s, GetWaitTimeForType(eventType)), HandleEvent, options, _cancellationTokenSource.Token);
-				        });
-				    else
-                        Task.Run(() => client.OnMessageAsync(HandleEvent, options));
-#pragma warning restore 4014
-                }
-            }
-		}
-
-		private async Task HandleEventForMultipleDeployments(BrokeredMessage eventToHandle)
-		{
-			try
-			{			    
-                var eventType = Type.GetType(eventToHandle.ContentType);
-				// Should be using json serialization
-				var theEvent = JsonConvert.DeserializeObject(eventToHandle.GetBody<string>(), eventType);
-
-				var client = _queueClients[eventType];
-
-				var message = JsonConvert.SerializeObject(theEvent);
-				var brokeredMessage = new BrokeredMessage(message)
-				{
-					MessageId = message.GetHashCode().ToString(),
-					ContentType = eventToHandle.ContentType
-				};
-
-				client.Send(brokeredMessage);
-			}
-			catch (Exception ex)
-			{
-			    _logger.Error("ServiceBusWithHandlers", ex, " Abandoning {0}: {1}", eventToHandle.MessageId, ex.Message);
-			    await Task.Delay((int)(100 * Math.Pow(eventToHandle.DeliveryCount, 2)));
-                eventToHandle.Abandon();
-			}
-		}
-
-		private async Task HandleEvent(BrokeredMessage eventToHandle)
-		{
-		    try
-		    {
-		        var eventType = Type.GetType(eventToHandle.ContentType);
-                
-		        object message;
-		        if (_useJsonSerialization)
-		        {
-		            message = JsonConvert.DeserializeObject(eventToHandle.GetBody<string>(), eventType);
-		        }
-		        else
-		        {
-		            message = eventToHandle.GetType()
-		                .GetMethod("GetBody", new Type[] { })
-		                .MakeGenericMethod(eventType)
-		                .Invoke(eventToHandle, new object[] { });
-		        }
-
-		        var handlerTypes = _eventHandlers[eventType];
-
-		        foreach (var handlerType in handlerTypes)
-		        {
-		            var handler = _handlerActivator.GetInstance(handlerType);
-		            var handleMethodInfo = handlerType.GetMethod("HandleAsync", new[] {eventType});
-		            if (handleMethodInfo == null) continue;
-		            _logger.Information(LoggerContext, "Handling Event {0} {1}", eventType, handlerType);
-                    await ((Task) handleMethodInfo.Invoke(handler, new[] {message}));
-		        }
-
-		        eventToHandle.Complete();
-		    }
-		    catch (Exception ex)
-		    {		        
-		        await Task.Delay((int)(100 * Math.Pow(eventToHandle.DeliveryCount,2)));
-		        eventToHandle.Abandon();		        
-		    }
-		}
-
-		private async Task HandleMessage(BrokeredMessage messageToHandle)
-		{
-			try
-			{
-				var messageType = Type.GetType(messageToHandle.ContentType);
-                
-                object message;
-				if (_useJsonSerialization)
-				{
-					message = JsonConvert.DeserializeObject(messageToHandle.GetBody<string>(), messageType);
-				}
-				else
-				{
-					message = messageToHandle.GetType()
-								.GetMethod("GetBody", new Type[] {})
-								.MakeGenericMethod(messageType)
-								.Invoke(messageToHandle, new object[] {});
-				}
-                
-				if (messageType.DoesTypeImplementInterface(typeof(IEvent)))
-				{
-					var handlerTypes = _eventHandlers[messageType];
-					foreach (var handlerType in handlerTypes)
-					{
-						var handler = _handlerActivator.GetInstance(handlerType);
-						var handleMethodInfo = handlerType.GetMethod("HandleAsync", new[] { messageType });
-					    _logger.Information(LoggerContext, "Handling Command {0} {1}", messageType, handlerType);
-                        await (Task)handleMethodInfo.Invoke(handler, new[] { message });
-					}
-				}
-				else
-				{
-					var handlerType = _queueHandlers[messageType];
-					var handler = _handlerActivator.GetInstance(handlerType);
-
-					var handleMethodInfo = handlerType.GetMethod("HandleAsync", new[] { messageType, typeof(ICommandActions) });
-					await ((Task)handleMethodInfo?.Invoke(handler, new[] { message, new CommandActions(messageToHandle) }));
-				}
-				messageToHandle.Complete();
-			}
-			catch (Exception ex)
-			{
-                await Task.Delay((int)(100 * Math.Pow(messageToHandle.DeliveryCount, 2)));
-                messageToHandle.Abandon();                
-			}
-		}
-
-		internal async Task<MessageSession> AcceptMessageQueueSession(QueueClient client, TimeSpan sessionWaitTime)
+        internal async Task<MessageSession> AcceptMessageQueueSession(QueueClient client, TimeSpan sessionWaitTime)
 		{
 		    return await client.AcceptMessageSessionAsync(sessionWaitTime);
 		}
@@ -464,7 +271,7 @@ namespace HighIronRanch.Azure.ServiceBus
 	    }
 
         internal async Task StartQueueSessionAsync(QueueClient client, Func<QueueClient, Task<MessageSession>> clientAccept, Func<BrokeredMessage, Task> messageHandler, OnMessageOptions options, CancellationToken token)
-		{
+		{            
 		    await StartSessionAsync(client, clientAccept, messageHandler, options, token);
         }
 
@@ -477,10 +284,9 @@ namespace HighIronRanch.Azure.ServiceBus
 	    {
 	        while (!token.IsCancellationRequested)
 	        {
-	            MessageSession session = null;
 	            try
 	            {
-	                session = await clientAccept(client);	                
+	                var session = await clientAccept(client);	                
                     _logger.Debug(LoggerContext, $"Session accepted: {session.SessionId}");
 	                session.OnMessageAsync(messageHandler, options);
 	            }
@@ -501,5 +307,149 @@ namespace HighIronRanch.Azure.ServiceBus
 
 	        _logger.Debug(LoggerContext, "Cancellation Requested for {0}", messageHandler.Method.Name);
 	    }
-    }
+
+	    private async Task HandleEventForMultipleDeployments(BrokeredMessage eventToHandle)
+	    {
+	        try
+	        {			    
+	            var eventType = Type.GetType(eventToHandle.ContentType);
+	            // Should be using json serialization
+	            var theEvent = JsonConvert.DeserializeObject(eventToHandle.GetBody<string>(), eventType);
+
+	            var client = _queueClients[eventType];
+
+	            var message = JsonConvert.SerializeObject(theEvent);
+	            var brokeredMessage = new BrokeredMessage(message)
+	            {
+	                MessageId = message.GetHashCode().ToString(),
+	                ContentType = eventToHandle.ContentType
+	            };
+
+	            client.Send(brokeredMessage);
+	        }
+	        catch (Exception ex)
+	        {
+	            _logger.Error("ServiceBusWithHandlers", ex, " Abandoning {0}: {1}", eventToHandle.MessageId, ex.Message);
+	            await Task.Delay((int)(100 * Math.Pow(eventToHandle.DeliveryCount, 2)));
+	            eventToHandle.Abandon();
+	        }
+	    }
+
+	    public async Task StartHandlers()
+		{
+		    var commandSessionHandlerFactory = new CommandSessionHandlerFactory(_handlerActivator, _eventHandlers, _queueHandlers, _logger, LoggerContext, _useJsonSerialization);
+            var eventSessionHandlerFactory = new EventSessionHandlerFactory(_handlerActivator, _eventHandlers, _queueHandlers, _logger, LoggerContext, _useJsonSerialization);
+
+#pragma warning disable 4014
+		    Task.Run(() =>
+		    {
+		        Parallel.ForEach(_queueHandlers.Keys, async messageType =>
+		        {
+		            try
+		            {
+		                var options = new OnMessageOptions
+		                {
+		                    AutoComplete = false
+		                };
+		                var client = _queueClients[messageType];
+		                client.PrefetchCount = MessagePrefetchSize;
+		                if (typeof(IAggregateCommand).IsAssignableFrom(messageType))
+		                {
+		                    await client.RegisterSessionHandlerFactoryAsync(
+		                        commandSessionHandlerFactory,
+		                        new SessionHandlerOptions
+		                        {
+		                            AutoComplete = false,
+		                            AutoRenewTimeout = GetWaitTimeForType(messageType)
+		                        });
+		                }
+		                else
+		                {
+		                    options.MaxConcurrentCalls = 10;
+
+		                    Task.Run(() =>
+		                    {
+		                        var commandHandler = new BusCommandHandler(_handlerActivator, _eventHandlers,
+		                            _queueHandlers, _logger,
+		                            LoggerContext, _useJsonSerialization);
+		                        client.OnMessageAsync(async c => await commandHandler.OnMessageAsync(null, c), options);
+		                    });
+		                }
+		            }
+		            catch (Exception ex)
+		            {
+                        _logger.Error(LoggerContext, ex, "Error starting command handler for type {0}",messageType.ToString());
+		            }
+		        });
+
+		        Parallel.ForEach(_eventHandlers.Keys, async eventType =>
+		        {
+		            try
+		            {
+		                var options = new OnMessageOptions
+		                {
+		                    AutoComplete = false
+		                };
+		                options.MaxConcurrentCalls = 10;
+
+		                var isAggregateEvent = typeof(IAggregateEvent).IsAssignableFrom(eventType);
+
+		                var client =
+		                    await _serviceBus.CreateSubscriptionClientAsync(eventType.FullName, eventType.Name,
+		                        isAggregateEvent);
+
+		                if (_hasMultipleDeployments)
+		                {
+		                    if (isAggregateEvent)
+		                    {
+		                        await client.RegisterSessionHandlerFactoryAsync(
+		                            eventSessionHandlerFactory,
+		                            new SessionHandlerOptions
+		                            {
+		                                AutoComplete = false,
+		                                AutoRenewTimeout = GetWaitTimeForType(eventType)
+		                            });
+		                    }
+		                    else
+		                        Task.Run(() => client.OnMessageAsync(HandleEventForMultipleDeployments, options));
+
+		                    Task.Run(() =>
+		                    {
+		                        var qclient = _queueClients[eventType];
+		                        var eventHandler = new BusEventHandler(_handlerActivator, _eventHandlers, _queueHandlers,
+		                            _logger,
+		                            LoggerContext, _useJsonSerialization);
+		                        qclient.OnMessageAsync(async e => await eventHandler.OnMessageAsync(null, e), options);
+		                    });
+		                }
+		                else
+		                {
+		                    if (isAggregateEvent)
+		                    {
+		                        await client.RegisterSessionHandlerFactoryAsync(
+		                            eventSessionHandlerFactory,
+		                            new SessionHandlerOptions
+		                            {
+		                                AutoComplete = false,
+		                                AutoRenewTimeout = GetWaitTimeForType(eventType)
+		                            });
+		                    }
+		                    else
+		                    {
+		                        var eventHandler = new BusEventHandler(_handlerActivator, _eventHandlers, _queueHandlers,
+		                            _logger,
+		                            LoggerContext, _useJsonSerialization);
+		                        Task.Run(() =>
+		                            client.OnMessageAsync(async e => await eventHandler.OnMessageAsync(null, e), options));
+		                    }
+		                }
+		            }
+		            catch (Exception ex)
+		            {
+		                _logger.Error(LoggerContext, ex, "Error starting event handler for type {0}", eventType.ToString());
+		            }
+		        });
+		    });
+		}
+	}
 }

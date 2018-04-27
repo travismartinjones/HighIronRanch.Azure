@@ -165,7 +165,7 @@ namespace HighIronRanch.Azure.ServiceBus
 
 			await CreateSpecificEventsAsync(bus);
 
-			await bus.StartHandlers();
+		    await bus.StartHandlers();
 
 			return bus;
 		}
@@ -194,7 +194,8 @@ namespace HighIronRanch.Azure.ServiceBus
 
 				var commandTypesInAssemblies = assemblies
 					.SelectMany(assembly => assembly.GetTypes())
-					.Where(type => type.DoesTypeImplementInterface(typeof (ICommand)));
+					.Where(type => type.DoesTypeImplementInterface(typeof (ICommand)))
+			        .ToList();
 
                 var found = string.Join(",", commandTypesInAssemblies.Select(e => e.Name));
                 _logger.Debug(ServiceBusWithHandlers.LoggerContext, "Found the following commands: {0}", found);
@@ -211,7 +212,8 @@ namespace HighIronRanch.Azure.ServiceBus
 
 				var eventTypesInAssemblies = assemblies
 					.SelectMany(assembly => assembly.GetTypes())
-					.Where(type => type.DoesTypeImplementInterface(typeof (IEvent)));
+					.Where(type => type.DoesTypeImplementInterface(typeof (IEvent)))
+			        .ToList();
 
                 var found = string.Join(",", eventTypesInAssemblies.Select(e => e.Name));
                 _logger.Debug(ServiceBusWithHandlers.LoggerContext, "Found the following events: {0}", found);
@@ -252,7 +254,8 @@ namespace HighIronRanch.Azure.ServiceBus
 
 				var eventHandlerTypesInAssemblies = assemblies
 					.SelectMany(assembly => assembly.GetTypes())
-					.Where(type => type.DoesTypeImplementInterface(typeof(IEventHandler<>)));
+					.Where(type => type.DoesTypeImplementInterface(typeof(IEventHandler<>)))
+			        .ToList();
 
                 var found = string.Join(",", eventHandlerTypesInAssemblies.Select(e => e.Name));
                 _logger.Debug(ServiceBusWithHandlers.LoggerContext, "Found the following event handlers: {0}", found);
@@ -269,7 +272,8 @@ namespace HighIronRanch.Azure.ServiceBus
 
 				var handlerTypesInAssemblies = assemblies
 					.SelectMany(assembly => assembly.GetTypes())
-					.Where(type => type.DoesTypeImplementInterface(typeof(ICommandHandler<>)));
+					.Where(type => type.DoesTypeImplementInterface(typeof(ICommandHandler<>)))
+			        .ToList();
 
                 var found = string.Join(",", handlerTypesInAssemblies.Select(e => e.Name));
                 _logger.Debug(ServiceBusWithHandlers.LoggerContext, "Found the following command handlers: {0}", found);
