@@ -15,7 +15,11 @@ namespace HighIronRanch.Azure.ServiceBus
 	{
 		public static readonly string LoggerContext = "HighIronRanch.Azure.ServiceBus";
 
-	    private static int MessagePrefetchSize = 100;
+        // don't increase MessagePrefetchSize to something like 100, it will cause messages to deadletter, this is due to the lock window
+        // being exceeded, and causing message delivery counts to increase, even though they haven't been processed
+        // in this github example by microsoft, they changed their initial 100 (see comments) to 10, likely due to the same issue
+        // https://github.com/Azure/azure-service-bus/blob/master/samples/DotNet/Microsoft.ServiceBus.Messaging/Prefetch/Program.cs
+	    private static int MessagePrefetchSize = 10;
 		private readonly IServiceBus _serviceBus;
 		private bool _hasMultipleDeployments = true;
 		private bool _useJsonSerialization = true;
@@ -259,60 +263,13 @@ namespace HighIronRanch.Azure.ServiceBus
                 return _defaultSessionWaitTime;
             return new TimeSpan(0, 0, sessionAttribute.TimeoutSeconds);
         }
-
-        internal async Task<MessageSession> AcceptMessageQueueSession(QueueClient client, TimeSpan sessionWaitTime)
-		{
-		    return await client.AcceptMessageSessionAsync(sessionWaitTime);
-		}
-
-	    internal async Task<MessageSession> AcceptMessageSubscriptionSession(SubscriptionClient client, TimeSpan sessionWaitTime)
-	    {
-	        return await client.AcceptMessageSessionAsync(sessionWaitTime);
-	    }
-
-        internal async Task StartQueueSessionAsync(QueueClient client, Func<QueueClient, Task<MessageSession>> clientAccept, Func<BrokeredMessage, Task> messageHandler, OnMessageOptions options, CancellationToken token)
-		{            
-		    await StartSessionAsync(client, clientAccept, messageHandler, options, token);
-        }
-
-	    internal async Task StartSubscriptionSessionAsync(SubscriptionClient client, Func<SubscriptionClient, Task<MessageSession>> clientAccept, Func<BrokeredMessage, Task> messageHandler, OnMessageOptions options, CancellationToken token)
-	    {
-	        await StartSessionAsync(client, clientAccept, messageHandler, options, token);
-	    }
-
-	    internal async Task StartSessionAsync<T>(T client, Func<T, Task<MessageSession>> clientAccept, Func<BrokeredMessage, Task> messageHandler, OnMessageOptions options, CancellationToken token)
-	    {
-	        while (!token.IsCancellationRequested)
-	        {
-	            try
-	            {
-	                var session = await clientAccept(client);	                
-                    _logger.Debug(LoggerContext, $"Session accepted: {session.SessionId}");
-	                session.OnMessageAsync(messageHandler, options);
-	            }
-	            catch (TimeoutException)
-	            {
-	                //_logger.Debug(LoggerContext, ex, "Session timeout: {0}", Thread.CurrentThread.ManagedThreadId);
-	                // This is normal. Any logging is noise.
-	            }
-	            catch (OperationCanceledException ex)
-	            {
-	                _logger.Information(LoggerContext, ex, "Cancelled: {0}", Thread.CurrentThread.ManagedThreadId);
-	            }
-	            catch (Exception ex)
-	            {
-	                _logger.Error(LoggerContext, ex, "Session exception: {0}", ex.Message);                    
-	            }
-	        }
-
-	        _logger.Debug(LoggerContext, "Cancellation Requested for {0}", messageHandler.Method.Name);
-	    }
-
+        
 	    private async Task HandleEventForMultipleDeployments(BrokeredMessage eventToHandle)
 	    {
 	        try
 	        {			    
 	            var eventType = Type.GetType(eventToHandle.ContentType);
+	            if (eventType == null) return;
 	            // Should be using json serialization
 	            var theEvent = JsonConvert.DeserializeObject(eventToHandle.GetBody<string>(), eventType);
 
@@ -346,32 +303,29 @@ namespace HighIronRanch.Azure.ServiceBus
 		        Parallel.ForEach(_queueHandlers.Keys, async messageType =>
 		        {
 		            try
-		            {
-		                var options = new OnMessageOptions
-		                {
-		                    AutoComplete = false
-		                };
+		            {		                
 		                var client = _queueClients[messageType];
 		                client.PrefetchCount = MessagePrefetchSize;
 		                if (typeof(IAggregateCommand).IsAssignableFrom(messageType))
 		                {
-		                    await client.RegisterSessionHandlerFactoryAsync(
-		                        commandSessionHandlerFactory,
-		                        new SessionHandlerOptions
-		                        {
-		                            AutoComplete = false,
-		                            AutoRenewTimeout = GetWaitTimeForType(messageType)
-		                        });
+		                    var options = new SessionHandlerOptions
+		                    {
+		                        AutoComplete = false,
+		                    };
+                            var waitTime = GetWaitTimeForType(messageType);
+                            options.MessageWaitTimeout = options.MessageWaitTimeout < waitTime ? waitTime : options.MessageWaitTimeout;
+                            options.AutoRenewTimeout = options.AutoRenewTimeout < waitTime ? new TimeSpan(waitTime.Ticks * 5) : options.AutoRenewTimeout;
+
+                            await client.RegisterSessionHandlerFactoryAsync(commandSessionHandlerFactory,options);
 		                }
 		                else
 		                {
-		                    options.MaxConcurrentCalls = 10;
-
-		                    Task.Run(() =>
+		                    var commandHandler = new BusCommandHandler(_handlerActivator, _queueHandlers, _logger,
+		                        LoggerContext, _useJsonSerialization);
+		                    client.OnMessageAsync(async c => await commandHandler.OnMessageAsync(null, c), new OnMessageOptions
 		                    {
-		                        var commandHandler = new BusCommandHandler(_handlerActivator, _queueHandlers, _logger,
-		                            LoggerContext, _useJsonSerialization);
-		                        client.OnMessageAsync(async c => await commandHandler.OnMessageAsync(null, c), options);
+		                        AutoComplete = false,
+		                        MaxConcurrentCalls = 10
 		                    });
 		                }
 		            }
@@ -385,59 +339,59 @@ namespace HighIronRanch.Azure.ServiceBus
 		        {
 		            try
 		            {
-		                var options = new OnMessageOptions
-		                {
-		                    AutoComplete = false
-		                };
-		                options.MaxConcurrentCalls = 10;
-
 		                var isAggregateEvent = typeof(IAggregateEvent).IsAssignableFrom(eventType);
 
-		                var client =
-		                    await _serviceBus.CreateSubscriptionClientAsync(eventType.FullName, eventType.Name,
-		                        isAggregateEvent);
+		                var client = await _serviceBus.CreateSubscriptionClientAsync(eventType.FullName, eventType.Name, isAggregateEvent);
 
 		                if (_hasMultipleDeployments)
 		                {
 		                    if (isAggregateEvent)
 		                    {
-		                        await client.RegisterSessionHandlerFactoryAsync(
-		                            eventSessionHandlerFactory,
-		                            new SessionHandlerOptions
-		                            {
-		                                AutoComplete = false,
-		                                AutoRenewTimeout = GetWaitTimeForType(eventType)
-		                            });
+		                        var options = new SessionHandlerOptions
+		                        {
+		                            AutoComplete = false,
+		                        };
+                                var waitTime = GetWaitTimeForType(eventType);
+                                options.MessageWaitTimeout = options.MessageWaitTimeout < waitTime ? waitTime : options.MessageWaitTimeout;
+                                options.AutoRenewTimeout = options.AutoRenewTimeout < waitTime ? new TimeSpan(waitTime.Ticks * 5) : options.AutoRenewTimeout;
+                                await client.RegisterSessionHandlerFactoryAsync(eventSessionHandlerFactory, options);
 		                    }
 		                    else
-		                        Task.Run(() => client.OnMessageAsync(HandleEventForMultipleDeployments, options));
-
-		                    Task.Run(() =>
+		                        client.OnMessageAsync(HandleEventForMultipleDeployments, new OnMessageOptions
+		                        {
+		                            AutoComplete = false,
+		                            MaxConcurrentCalls = 10
+		                        });
+                            
+		                    var qclient = _queueClients[eventType];
+		                    var eventHandler = new BusEventHandler(_handlerActivator, _eventHandlers, _logger, LoggerContext, _useJsonSerialization);
+		                    qclient.OnMessageAsync(async e => await eventHandler.OnMessageAsync(null, e), new OnMessageOptions
 		                    {
-		                        var qclient = _queueClients[eventType];
-		                        var eventHandler = new BusEventHandler(_handlerActivator, _eventHandlers, _logger,
-		                            LoggerContext, _useJsonSerialization);
-		                        qclient.OnMessageAsync(async e => await eventHandler.OnMessageAsync(null, e), options);
-		                    });
+		                        AutoComplete = false,
+		                        MaxConcurrentCalls = 10
+		                    });		                    
 		                }
 		                else
 		                {
 		                    if (isAggregateEvent)
 		                    {
-		                        await client.RegisterSessionHandlerFactoryAsync(
-		                            eventSessionHandlerFactory,
-		                            new SessionHandlerOptions
-		                            {
-		                                AutoComplete = false,
-		                                AutoRenewTimeout = GetWaitTimeForType(eventType)
-		                            });
+		                        var options = new SessionHandlerOptions
+		                        {
+		                            AutoComplete = false,
+		                        };
+                                var waitTime = GetWaitTimeForType(eventType);
+                                options.MessageWaitTimeout = options.MessageWaitTimeout < waitTime ? waitTime : options.MessageWaitTimeout;
+                                options.AutoRenewTimeout = options.AutoRenewTimeout < waitTime ? new TimeSpan(waitTime.Ticks * 5) : options.AutoRenewTimeout;
+                                await client.RegisterSessionHandlerFactoryAsync(eventSessionHandlerFactory,options);
 		                    }
 		                    else
 		                    {
-		                        var eventHandler = new BusEventHandler(_handlerActivator, _eventHandlers, _logger,
-		                            LoggerContext, _useJsonSerialization);
-		                        Task.Run(() =>
-		                            client.OnMessageAsync(async e => await eventHandler.OnMessageAsync(null, e), options));
+		                        var eventHandler = new BusEventHandler(_handlerActivator, _eventHandlers, _logger, LoggerContext, _useJsonSerialization);		                        
+		                        client.OnMessageAsync(async e => await eventHandler.OnMessageAsync(null, e), new OnMessageOptions
+		                        {
+		                            AutoComplete = false,
+		                            MaxConcurrentCalls = 10
+		                        });
 		                    }
 		                }
 		            }

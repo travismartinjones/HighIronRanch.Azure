@@ -5,6 +5,7 @@ using System.Reflection;
 using System.Threading.Tasks;
 using HighIronRanch.Azure.ServiceBus.Contracts;
 using HighIronRanch.Core.Services;
+using Microsoft.ServiceBus;
 
 namespace HighIronRanch.Azure.ServiceBus
 {
@@ -143,6 +144,8 @@ namespace HighIronRanch.Azure.ServiceBus
 		public async Task<ServiceBusWithHandlers> BuildAsync()
 		{
 			var bus = new ServiceBusWithHandlers(_serviceBus, _handlerActivator, _logger);
+
+		    ServiceBusEnvironment.SystemConnectivity.Mode = ConnectivityMode.Https;
 
 			// set multiple deployments first because json serialization is true in ServiceBus by default
 			// this will prevent any exception
