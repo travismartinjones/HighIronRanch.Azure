@@ -26,8 +26,7 @@ namespace HighIronRanch.Azure.TableStorage
 		public CloudTable GetTable(string tableName, bool shouldCreateIfNotExists)
 		{
 			var client = CloudStorageAccount.Parse(_appSettings.AzureStorageConnectionString).CreateCloudTableClient();
-			client.PayloadFormat = TablePayloadFormat.AtomPub;
-
+			
 			var cleansedTableName = CleanseTableName(tableName);
 			
 			var table = client.GetTableReference(cleansedTableName);
