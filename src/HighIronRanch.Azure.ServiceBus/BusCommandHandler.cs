@@ -74,13 +74,20 @@ namespace HighIronRanch.Azure.ServiceBus
             catch (Exception ex)
             {
                 if (messageToHandle.DeliveryCount < MaximumCommandDeliveryCount)
-                {                    
-                    // add in exponential spacing between retries
-                    await Task.Delay((int) (100 * Math.Pow(messageToHandle.DeliveryCount, 2)));
-                    _logger.Error(_loggerContext, ex, "Command Error {0}", messageType);
-                    await messageToHandle.AbandonAsync();
-                    if(session != null)
-                        await session.CloseAsync();
+                {
+                    try
+                    {
+                        // add in exponential spacing between retries
+                        await Task.Delay((int) (100 * Math.Pow(messageToHandle.DeliveryCount, 2)));
+                        _logger.Error(_loggerContext, ex, "Command Error {0}", messageType);
+                        await messageToHandle.AbandonAsync();
+                        if (session != null)
+                            await session.CloseAsync();
+                    }
+                    catch (Exception ex2)
+                    {
+                        _logger.Error(_loggerContext, ex2, "Command Retry Error {0}", messageType);
+                    }
                 }
                 else
                 {

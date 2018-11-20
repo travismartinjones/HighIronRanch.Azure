@@ -112,7 +112,7 @@ namespace HighIronRanch.Azure.DocumentDb
                     if (statusCode == 429)
                     {
                         _logger.Warning(Common.LoggerContext, "429 http code inserting {0}", item.Id);
-                        Thread.Sleep(documentClientException.RetryAfter);
+                        await Task.Delay(documentClientException.RetryAfter);                        
                     }
                     //add other error codes to trap here e.g. 503 - Service Unavailable
                     else
