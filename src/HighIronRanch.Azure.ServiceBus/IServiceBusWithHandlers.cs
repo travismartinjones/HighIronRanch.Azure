@@ -10,6 +10,7 @@ namespace HighIronRanch.Azure.ServiceBus
         Task SendAsync(ICommand command, DateTime? enqueueTime = null);
         Task PublishAsync(IEvent evt);
         Task<long> GetMessageCount(Type type);
+        Task<long> GetMessageCount(Type type, string sessionId);
         Task StartHandlers();
     }
 }

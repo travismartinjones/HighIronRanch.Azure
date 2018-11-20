@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.ServiceBus;
@@ -25,6 +26,7 @@ namespace HighIronRanch.Azure.ServiceBus
         Task DeleteSubscriptionAsync(string topicName, string subscriptionName);
         Task<long> GetQueueLengthAsync(string name);
         Task<long> GetTopicLengthAsync(string name);
+        Task<long> GetQueueSessionLengthAsync(string name, bool isCommand, string sessionId);
     }
 
     public class ServiceBus : IServiceBus
@@ -178,6 +180,13 @@ namespace HighIronRanch.Azure.ServiceBus
         {
             var topic = await _manager.GetTopicAsync(CreateTopicName(name));
             return topic.MessageCountDetails.ActiveMessageCount;
+        }
+
+        public async Task<long> GetQueueSessionLengthAsync(string name, bool isCommand, string sessionId)
+        {
+            var queue = await CreateQueueClientAsync(name, isCommand);
+            var sessions = await queue.GetMessageSessionsAsync();
+            return sessions.Count(x => x.SessionId == sessionId);
         }
     }
 }

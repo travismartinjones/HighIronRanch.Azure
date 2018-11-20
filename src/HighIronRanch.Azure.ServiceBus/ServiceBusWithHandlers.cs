@@ -248,11 +248,22 @@ namespace HighIronRanch.Azure.ServiceBus
 	            return await _serviceBus.GetQueueLengthAsync(type.FullName);
 	        }
 
-	        if (type.DoesTypeImplementInterface(typeof(ICommand)))
+	        if (!type.DoesTypeImplementInterface(typeof(ICommand)))
 	        {
 	            return await _serviceBus.GetTopicLengthAsync(type.FullName);
 	        }
 
+	        return 0;
+	    }
+
+	    public async Task<long> GetMessageCount(Type type, string sessionId)
+	    {
+	        if (type.DoesTypeImplementInterface(typeof(ICommand)))
+	        {
+	            var isCommand = typeof(IAggregateCommand).IsAssignableFrom(type);
+	            return await _serviceBus.GetQueueSessionLengthAsync(type.FullName, isCommand, sessionId);
+	        }
+            
 	        return 0;
 	    }
 
@@ -286,9 +297,16 @@ namespace HighIronRanch.Azure.ServiceBus
 	        }
 	        catch (Exception ex)
 	        {
-	            _logger.Error("ServiceBusWithHandlers", ex, " Abandoning {0}: {1}", eventToHandle.MessageId, ex.Message);
-	            await Task.Delay((int)(100 * Math.Pow(eventToHandle.DeliveryCount, 2)));
-	            eventToHandle.Abandon();
+	            try
+	            {
+	                _logger.Error("ServiceBusWithHandlers", ex, " Abandoning {0}: {1}", eventToHandle.MessageId, ex.Message);
+	                await Task.Delay((int) (100 * Math.Pow(eventToHandle.DeliveryCount, 2)));
+	                eventToHandle.Abandon();
+	            }
+	            catch (Exception ex2)
+	            {
+	               _logger.Error("ServiceBusWithHandlers", ex, " Abandoning Error {0}: {1}", eventToHandle.MessageId, ex2.Message);
+	            }
 	        }
 	    }
 
