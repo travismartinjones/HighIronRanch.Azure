@@ -32,11 +32,13 @@ namespace HighIronRanch.Azure.ServiceBus
     public class ServiceBus : IServiceBus
     {
         private readonly IServiceBusSettings _settings;
+        private readonly IServiceBusTypeStateService _serviceBusTypeStateService;
         protected NamespaceManager _manager;
 
-        public ServiceBus(IServiceBusSettings settings, INamespaceManagerBuilder managerBuilder)
+        public ServiceBus(IServiceBusSettings settings, INamespaceManagerBuilder managerBuilder, IServiceBusTypeStateService serviceBusTypeStateService)
         {
             _settings = settings;
+            _serviceBusTypeStateService = serviceBusTypeStateService;
 
             _manager = managerBuilder
                 .CreateNamespaceBuilder()
@@ -95,9 +97,13 @@ namespace HighIronRanch.Azure.ServiceBus
             qd.RequiresSession = isSessionRequired;
             qd.EnableDeadLetteringOnMessageExpiration = true;
             qd.RequiresDuplicateDetection = true;
+            
+            var isPreviouslyCreated = await _serviceBusTypeStateService.GetIsQueueCreated(cleansedName);
+            
+            if (!isPreviouslyCreated && !_manager.QueueExists(cleansedName))
+                await _manager.CreateQueueAsync(qd);                
 
-            if (!_manager.QueueExists(cleansedName))
-                await _manager.CreateQueueAsync(qd);
+            await _serviceBusTypeStateService.OnQueueCreated(cleansedName);
         }
 
         public async Task<QueueClient> CreateQueueClientAsync(string name)
@@ -125,9 +131,12 @@ namespace HighIronRanch.Azure.ServiceBus
 
             var td = new TopicDescription(topicName);
 
-            if (!_manager.TopicExists(topicName))
-                await _manager.CreateTopicAsync(td);
+            var isPreviouslyCreated = await _serviceBusTypeStateService.GetIsTopicCreated(topicName);            
+            
+            if (!isPreviouslyCreated && !_manager.TopicExists(topicName))
+                await _manager.CreateTopicAsync(td);                
 
+            await _serviceBusTypeStateService.OnTopicCreated(topicName);
             return TopicClient.CreateFromConnectionString(_settings.AzureServiceBusConnectionString, topicName);
         }
 
