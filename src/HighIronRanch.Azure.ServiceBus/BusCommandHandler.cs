@@ -70,6 +70,16 @@ namespace HighIronRanch.Azure.ServiceBus
                 messageToHandle.Complete();
                 if(session != null)
                     await session.CloseAsync();
+            } 
+            catch (TimeoutException)
+            {
+                // This is normal. Any logging is noise.
+            }
+            catch (System.ServiceModel.FaultException<System.ServiceModel.ExceptionDetail> ex)
+            {
+                // ignore alternate exception that also represents a TimeoutException
+                if (!ex.Message.Contains("A timeout has occurred during the operation."))
+                    throw;
             }
             catch (Exception ex)
             {

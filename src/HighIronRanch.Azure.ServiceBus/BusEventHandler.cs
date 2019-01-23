@@ -37,7 +37,7 @@ namespace HighIronRanch.Azure.ServiceBus
             var eventType = Type.GetType(eventToHandle.ContentType);
 
             try
-            {                
+            {
                 if (eventType == null) return;
 
                 object message;
@@ -66,11 +66,23 @@ namespace HighIronRanch.Azure.ServiceBus
                     stopwatch.Start();
                     await ((Task) handleMethodInfo.Invoke(handler, new[] {message}));
                     stopwatch.Stop();
-                    _logger.Information(_loggerContext, "Handled Event {0} {1} in {2}s", eventType, handlerType, stopwatch.ElapsedMilliseconds/1000.0);
-                }                
-                eventToHandle.Complete();      
-                if(session != null)
+                    _logger.Information(_loggerContext, "Handled Event {0} {1} in {2}s", eventType, handlerType,
+                        stopwatch.ElapsedMilliseconds / 1000.0);
+                }
+
+                eventToHandle.Complete();
+                if (session != null)
                     await session.CloseAsync();
+            }
+            catch (TimeoutException)
+            {
+                // This is normal. Any logging is noise.
+            }
+            catch (System.ServiceModel.FaultException<System.ServiceModel.ExceptionDetail> ex)
+            {
+                // ignore alternate exception that also represents a TimeoutException
+                if (!ex.Message.Contains("A timeout has occurred during the operation."))
+                    throw;
             }
             catch (Exception ex)
             {		        	        
