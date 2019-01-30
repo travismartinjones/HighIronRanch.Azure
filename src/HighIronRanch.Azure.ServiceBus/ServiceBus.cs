@@ -93,16 +93,23 @@ namespace HighIronRanch.Azure.ServiceBus
 
         private async Task CreateCleansedNameQueueAsync(string cleansedName, bool isSessionRequired)
         {
-            var qd = new QueueDescription(cleansedName);
-            qd.RequiresSession = isSessionRequired;
-            qd.EnableDeadLetteringOnMessageExpiration = true;
-            qd.RequiresDuplicateDetection = true;
-            
             var isPreviouslyCreated = await _serviceBusTypeStateService.GetIsQueueCreated(cleansedName);
-            
-            if (!isPreviouslyCreated && !_manager.QueueExists(cleansedName))
-                await _manager.CreateQueueAsync(qd);                
 
+            if (isPreviouslyCreated) return;
+
+            if (_manager.QueueExists(cleansedName))
+            {
+                await _serviceBusTypeStateService.OnQueueCreated(cleansedName);
+                return;
+            }
+            
+            var qd = new QueueDescription(cleansedName)
+            {
+                RequiresSession = isSessionRequired,
+                EnableDeadLetteringOnMessageExpiration = true,
+                RequiresDuplicateDetection = true
+            };
+            await _manager.CreateQueueAsync(qd);
             await _serviceBusTypeStateService.OnQueueCreated(cleansedName);
         }
 
@@ -113,7 +120,7 @@ namespace HighIronRanch.Azure.ServiceBus
 
         public async Task<QueueClient> CreateQueueClientAsync(string name, bool isSessionRequired)
         {
-            var queueName = CreateQueueName(name);
+            var queueName = CreateQueueName(name);            
             await CreateCleansedNameQueueAsync(queueName, isSessionRequired);
 
             return QueueClient.CreateFromConnectionString(_settings.AzureServiceBusConnectionString, queueName);
@@ -128,16 +135,23 @@ namespace HighIronRanch.Azure.ServiceBus
         public async Task<TopicClient> CreateTopicClientAsync(string name)
         {
             var topicName = CreateTopicName(name);
+            
+            var isPreviouslyCreated = await _serviceBusTypeStateService.GetIsTopicCreated(topicName);
+
+            var topicClient = TopicClient.CreateFromConnectionString(_settings.AzureServiceBusConnectionString, topicName);;
+
+            if (isPreviouslyCreated) return topicClient;
+
+            if (_manager.TopicExists(topicName))
+            {
+                await _serviceBusTypeStateService.OnTopicCreated(topicName);
+                return topicClient;
+            }
 
             var td = new TopicDescription(topicName);
-
-            var isPreviouslyCreated = await _serviceBusTypeStateService.GetIsTopicCreated(topicName);            
-            
-            if (!isPreviouslyCreated && !_manager.TopicExists(topicName))
-                await _manager.CreateTopicAsync(td);                
-
+            await _manager.CreateTopicAsync(td);
             await _serviceBusTypeStateService.OnTopicCreated(topicName);
-            return TopicClient.CreateFromConnectionString(_settings.AzureServiceBusConnectionString, topicName);
+            return topicClient;
         }
 
         public async Task DeleteTopicAsync(string name)

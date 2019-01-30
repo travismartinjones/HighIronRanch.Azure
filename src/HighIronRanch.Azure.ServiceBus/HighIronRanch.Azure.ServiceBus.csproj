@@ -68,6 +68,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="AlertLevel.cs" />
     <Compile Include="CommandActions.cs" />
     <Compile Include="BusCommandHandler.cs" />
     <Compile Include="BusCommandHandlerFactory.cs" />

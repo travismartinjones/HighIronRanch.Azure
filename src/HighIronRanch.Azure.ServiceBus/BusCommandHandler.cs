@@ -62,48 +62,79 @@ namespace HighIronRanch.Azure.ServiceBus
                     var stopwatch = new Stopwatch();					   
                     _logger.Information(_loggerContext, "Handling Command {0} {1}", messageType, handlerType);                        
                     stopwatch.Start();
-                    await ((Task) handleMethodInfo?.Invoke(handler, new[] {message, new CommandActions(messageToHandle)}));
+                    await ((Task) handleMethodInfo?.Invoke(handler, new[] {message, new CommandActions(messageToHandle)})).ConfigureAwait(false);
                     stopwatch.Stop();
                     _logger.Information(_loggerContext, "Handled Command {0} {1} in {2}s", messageType, handlerType, stopwatch.ElapsedMilliseconds/1000.0);
                 }
                 
-                messageToHandle.Complete();
+                await messageToHandle.CompleteAsync().ConfigureAwait(false);
                 if(session != null)
-                    await session.CloseAsync();
+                    await session.CloseAsync().ConfigureAwait(false);
             } 
             catch (TimeoutException)
             {
-                // This is normal. Any logging is noise.
-            }
-            catch (System.ServiceModel.FaultException<System.ServiceModel.ExceptionDetail> ex)
-            {
-                // ignore alternate exception that also represents a TimeoutException
-                if (!ex.Message.Contains("A timeout has occurred during the operation."))
-                    throw;
+                await AbandonMessage(messageToHandle, session).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
                 if (messageToHandle.DeliveryCount < MaximumCommandDeliveryCount)
                 {
-                    try
-                    {
-                        // add in exponential spacing between retries
-                        await Task.Delay((int) (100 * Math.Pow(messageToHandle.DeliveryCount, 2)));
-                        _logger.Error(_loggerContext, ex, "Command Error {0}", messageType);
-                        await messageToHandle.AbandonAsync();
-                        if (session != null)
-                            await session.CloseAsync();
-                    }
-                    catch (Exception ex2)
-                    {
-                        _logger.Error(_loggerContext, ex2, "Command Retry Error {0}", messageType);
-                    }
+                    // add in exponential spacing between retries
+                    await Task.Delay(GetDelayFromDeliveryCount(messageToHandle.DeliveryCount)).ConfigureAwait(false);
+                    await LogCommandError(AlertLevel.Warning, ex, messageToHandle, messageType, session).ConfigureAwait(false);
+                    await AbandonMessage(messageToHandle, session).ConfigureAwait(false);              
                 }
                 else
                 {
-                    throw;
+                    await LogCommandError(AlertLevel.Error, ex, messageToHandle, messageType, session).ConfigureAwait(false);
+                    await AbandonMessage(messageToHandle, session).ConfigureAwait(false);
                 }
             }
+        }
+
+        private int GetDelayFromDeliveryCount(int deliveryCount)
+        {            
+            switch (deliveryCount)
+            {
+                case 9:
+                    return 5000;
+                case 8:
+                    return 1000;
+                case 7:
+                    return 500;
+                default:
+                    return 100;
+            }
+        }
+
+        private async Task LogCommandError(AlertLevel alertLevel, Exception ex, BrokeredMessage messageToHandle, Type messageType, MessageSession session)
+        {
+            try
+            {
+                if(alertLevel == AlertLevel.Error)
+                    _logger.Error(_loggerContext, ex, "Command Error {0} retry {1}", messageType, messageToHandle.DeliveryCount);
+                else if(alertLevel == AlertLevel.Warning)
+                    _logger.Warning(_loggerContext, ex, "Command Warning {0} retry {1}", messageType, messageToHandle.DeliveryCount);
+                else if(alertLevel == AlertLevel.Info)
+                    _logger.Information(_loggerContext, ex, "Command Info {0} retry {1}", messageType, messageToHandle.DeliveryCount);
+                await AbandonMessage(messageToHandle, session);
+            }
+            catch (Exception ex2)
+            {
+                if(alertLevel == AlertLevel.Error)
+                    _logger.Error(_loggerContext, ex, "Command Retry Error {0} retry {1}", messageType, messageToHandle.DeliveryCount);
+                else if(alertLevel == AlertLevel.Warning)
+                    _logger.Warning(_loggerContext, ex, "Command Retry Warning {0} retry {1}", messageType, messageToHandle.DeliveryCount);
+                else if(alertLevel == AlertLevel.Info)
+                    _logger.Information(_loggerContext, ex, "Command Retry Info {0} retry {1}", messageType, messageToHandle.DeliveryCount);
+            }
+        }
+
+        private static async Task AbandonMessage(BrokeredMessage messageToHandle, MessageSession session)
+        {
+            await messageToHandle.AbandonAsync().ConfigureAwait(false);
+            if (session != null)
+                await session.CloseAsync().ConfigureAwait(false);
         }
 
         public async Task OnCloseSessionAsync(MessageSession session)
