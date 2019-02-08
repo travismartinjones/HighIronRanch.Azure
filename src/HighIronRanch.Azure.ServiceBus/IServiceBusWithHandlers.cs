@@ -4,7 +4,7 @@ using HighIronRanch.Azure.ServiceBus.Contracts;
 
 namespace HighIronRanch.Azure.ServiceBus
 {
-    public interface IServiceBusWithHandlers : IDisposable
+    public interface IServiceBusWithHandlers
     {
         void UseJsonMessageSerialization(bool useJsonSerialization);
         Task SendAsync(ICommand command, DateTime? enqueueTime = null);

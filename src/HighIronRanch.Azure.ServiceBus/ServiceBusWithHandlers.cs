@@ -46,34 +46,7 @@ namespace HighIronRanch.Azure.ServiceBus
 			_handlerActivator = handlerActivator;
 			_logger = logger;
 		}
-
-		~ServiceBusWithHandlers()
-		{
-			Dispose(false);
-		}
-
-		public void Dispose()
-		{
-			Dispose(true);
-		}
-
-		protected virtual void Dispose(bool disposing)
-		{
-            // stop the handlers
-            _cancellationTokenSource.Cancel();
-            Thread.Sleep(_defaultSessionWaitTime);
-
-            if (!disposing)
-			{
-				// Unsubscribe
-				foreach (var eventType in _eventHandlers.Keys)
-				{
-					_logger.Information(LoggerContext, "Unsubscribing {0}", eventType.FullName);
-					_serviceBus.DeleteSubscriptionAsync(eventType.FullName, eventType.Name);
-				}                
-			}
-		}
-
+        
 		/// <summary>
 		/// When true, messages are serialized as json which is humanly readable in 
 		/// Service Bus Explorer. Otherwise, messages are serialized with Azure
