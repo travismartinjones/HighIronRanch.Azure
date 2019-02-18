@@ -70,7 +70,7 @@ namespace HighIronRanch.Azure.ServiceBus
 				// Unsubscribe
 				foreach (var eventType in _eventHandlers.Keys)
 				{
-					_logger.Information(LoggerContext, "Unsubscribing {0}", eventType.FullName);
+					//_logger.Information(LoggerContext, "Unsubscribing {0}", eventType.FullName);
 					_serviceBus.DeleteSubscriptionAsync(eventType.FullName, eventType.Name);
 				}
 
