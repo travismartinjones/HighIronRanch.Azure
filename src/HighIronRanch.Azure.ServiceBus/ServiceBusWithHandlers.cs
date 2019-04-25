@@ -25,6 +25,7 @@ namespace HighIronRanch.Azure.ServiceBus
 		private bool _useJsonSerialization = true;
 		private readonly IHandlerActivator _handlerActivator;
 		private readonly ILogger _logger;
+        private readonly IScheduledMessageRepository _scheduledMessageRepository;
         protected CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
         
 		// ICommand, QueueClient
@@ -40,12 +41,17 @@ namespace HighIronRanch.Azure.ServiceBus
 		protected readonly IDictionary<Type, ISet<Type>> _eventHandlers = new ConcurrentDictionary<Type, ISet<Type>>();
 	    private readonly TimeSpan _defaultSessionWaitTime = new TimeSpan(0, 0, 60);
 
-	    public ServiceBusWithHandlers(IServiceBus serviceBus, IHandlerActivator handlerActivator, ILogger logger)
+	    public ServiceBusWithHandlers(
+            IServiceBus serviceBus, 
+            IHandlerActivator handlerActivator, 
+            ILogger logger,
+            IScheduledMessageRepository scheduledMessageRepository)
 		{
 			_serviceBus = serviceBus;
 			_handlerActivator = handlerActivator;
 			_logger = logger;
-		}
+            _scheduledMessageRepository = scheduledMessageRepository;
+        }
         
 		/// <summary>
 		/// When true, messages are serialized as json which is humanly readable in 
@@ -105,11 +111,25 @@ namespace HighIronRanch.Azure.ServiceBus
 			}
 		}
 
-		public async Task SendAsync(ICommand command, DateTime? enqueueTime = null)
+        public async Task SendAsync(ICommand command, DateTime? enqueueTime = null)
+        {
+            await SendAsync(command, new EnqueueOptions
+            {
+                EnqueueTime = enqueueTime
+            });
+        }
+
+		public async Task SendAsync(ICommand command, EnqueueOptions options)
 		{
 			var isCommand = command is IAggregateCommand;
-			var client = _queueClients[command.GetType()];            
-            
+			var client = _queueClients[command.GetType()];
+
+            // if the enqueue time is 2 seconds or less, the user is really wanting this message
+            // to be processed right away. if we proceed and allow the message to be scheduled so 
+            // soon, then there is a possibility that azure service bus will reject the request
+            if (options.EnqueueTime.HasValue && (options.EnqueueTime.Value - DateTime.UtcNow).TotalSeconds < 2)
+                options.EnqueueTime = null;
+
 			BrokeredMessage brokeredMessage;
 
 			if (_useJsonSerialization)
@@ -127,16 +147,77 @@ namespace HighIronRanch.Azure.ServiceBus
 			{
 				brokeredMessage.SessionId = ((IAggregateCommand) command).GetAggregateId();                
 			}
-
-		    if (enqueueTime.HasValue)
-		    {
-		        brokeredMessage.ScheduledEnqueueTimeUtc = enqueueTime.Value.ToUniversalTime();
-		    }
-
+            
 		    try
-		    {
-		        await client.SendAsync(brokeredMessage);
-		    }
+            {
+                if (options.EnqueueTime.HasValue)
+                {
+                    brokeredMessage.ScheduledEnqueueTimeUtc = options.EnqueueTime.Value.ToUniversalTime();
+                    var type = command.GetType().FullName;
+
+                    if(options.RemoveAnyExisting && options.RemoveAllButLastInWindowSeconds.HasValue)
+                        throw new ArgumentException("RemoveAnyExisting and RemoveAllButLastInWindowSeconds are not supported being set at the same time");
+                    
+                    if(options.RemoveAnyExisting && options.DuplicatePreventionSeconds.HasValue)
+                        throw new ArgumentException("RemoveAnyExisting and DuplicatePreventionSeconds are not supported being set at the same time");
+
+                    if(options.RemoveAllButLastInWindowSeconds.HasValue && options.DuplicatePreventionSeconds.HasValue)
+                        throw new ArgumentException("RemoveAllButLastInWindowSeconds and DuplicatePreventionSeconds are not supported being set at the same time");
+
+                    if (options.RemoveAnyExisting)
+                    {
+                        var preExistingMessages = await _scheduledMessageRepository.GetBySessionIdType(brokeredMessage.SessionId, type);
+                        
+                        // any previously queued message of the same type should be cancelled and removed
+                        foreach (var preExistingMessage in preExistingMessages)
+                        {
+                            await client.CancelScheduledMessageAsync(preExistingMessage.SequenceId);
+                            await _scheduledMessageRepository.Delete(preExistingMessage.SessionId, preExistingMessage.CorrelationId);
+                        }
+                    }
+                    else if (options.RemoveAllButLastInWindowSeconds.HasValue)
+                    {
+                        var preExistingMessages = (await _scheduledMessageRepository.GetBySessionIdType(brokeredMessage.SessionId, type))
+                            .Where(x => x.ScheduleEnqueueDate > DateTime.UtcNow && x.ScheduleEnqueueDate < DateTime.UtcNow.AddSeconds(options.RemoveAllButLastInWindowSeconds.Value))
+                            .ToList();
+                        
+                        // remove all but the last message
+                        if (preExistingMessages.Count > 0)
+                        {
+                            foreach (var messageToDelete in preExistingMessages.Take(preExistingMessages.Count - 1))
+                            {
+                                await client.CancelScheduledMessageAsync(messageToDelete.SequenceId);
+                                await _scheduledMessageRepository.Delete(messageToDelete.SessionId, messageToDelete.CorrelationId);
+                            }
+                        }
+                    }
+                    else if (options.DuplicatePreventionSeconds.HasValue)
+                    {                        
+                        var preExistingMessages = await _scheduledMessageRepository.
+                            GetBySessionIdTypeScheduledDateRange(
+                                brokeredMessage.SessionId, 
+                                type, 
+                                options.EnqueueTime.Value.AddSeconds(-options.DuplicatePreventionSeconds.Value), 
+                                options.EnqueueTime.Value.AddSeconds(options.DuplicatePreventionSeconds.Value)
+                            );
+
+                        // only allow the message to send if there are no already queued messages of the same type
+                        if (preExistingMessages.Count > 0)
+                        {
+                            return;
+                        }
+                    }
+                    
+
+                    brokeredMessage.CorrelationId = Guid.NewGuid().ToString();
+                    var sequenceId = await client.ScheduleMessageAsync(brokeredMessage, brokeredMessage.ScheduledEnqueueTimeUtc).ConfigureAwait(false);
+                    await _scheduledMessageRepository.Insert(brokeredMessage.SessionId, brokeredMessage.MessageId, sequenceId, type, DateTime.UtcNow, brokeredMessage.ScheduledEnqueueTimeUtc).ConfigureAwait(false);
+                }
+                else
+                {
+                    await client.SendAsync(brokeredMessage).ConfigureAwait(false);
+                }
+            }
 		    catch (Exception)
 		    {
 		        _logger.Error(LoggerContext, "Sending command {0}", command.GetType().ToString());
@@ -285,7 +366,7 @@ namespace HighIronRanch.Azure.ServiceBus
 
 	    public async Task StartHandlers()
 		{
-		    var commandSessionHandlerFactory = new CommandSessionHandlerFactory(_handlerActivator, _queueHandlers, _logger, LoggerContext, _useJsonSerialization);
+		    var commandSessionHandlerFactory = new CommandSessionHandlerFactory(_handlerActivator, _queueHandlers, _logger, _scheduledMessageRepository, LoggerContext, _useJsonSerialization);
             var eventSessionHandlerFactory = new EventSessionHandlerFactory(_handlerActivator, _eventHandlers, _queueHandlers, _logger, LoggerContext, _useJsonSerialization);
 
 #pragma warning disable 4014
@@ -311,7 +392,7 @@ namespace HighIronRanch.Azure.ServiceBus
 		                }
 		                else
 		                {
-		                    var commandHandler = new BusCommandHandler(_handlerActivator, _queueHandlers, _logger,
+		                    var commandHandler = new BusCommandHandler(_handlerActivator, _queueHandlers, _logger, _scheduledMessageRepository,
 		                        LoggerContext, _useJsonSerialization);
 		                    client.OnMessageAsync(async c => await commandHandler.OnMessageAsync(null, c), new OnMessageOptions
 		                    {

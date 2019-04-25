@@ -88,10 +88,11 @@ namespace HighIronRanch.Azure.ServiceBus.Test.Integration
 			{
 				var logger = fake.an<ILogger>();
 				var activator = new HandlerActivator();
+                var scheduledMessageRepository = fake.an<IScheduledMessageRepository>();
 
 				sut_factory.create_using(() =>
 				{
-					var busBuilder = new ServiceBusWithHandlersBuilder(_serviceBus, activator, logger);
+					var busBuilder = new ServiceBusWithHandlersBuilder(_serviceBus, activator, logger, scheduledMessageRepository);
 
 					busBuilder.CreateServiceBus()
 						.WithEventHandlers(new List<Type>() { typeof(TestEventHandler), typeof(SecondTestEventHandler) });

@@ -14,8 +14,9 @@ namespace HighIronRanch.Azure.ServiceBus
 		private readonly IServiceBus _serviceBus;
 		private readonly IHandlerActivator _handlerActivator;
 		private readonly ILogger _logger;
+        private readonly IScheduledMessageRepository _scheduledMessageRepository;
 
-		private IEnumerable<string> _messageAssembliesToScan;
+        private IEnumerable<string> _messageAssembliesToScan;
 		private IEnumerable<Type> _messageTypes; 
 
 		private IEnumerable<string> _messageHandlerAssembliesToScan;
@@ -30,12 +31,17 @@ namespace HighIronRanch.Azure.ServiceBus
 		private bool _hasMultipleDeployments = true;
 		private bool _useJsonSerialization = true;
 
-		public ServiceBusWithHandlersBuilder(IServiceBus serviceBus, IHandlerActivator handlerActivator, ILogger logger)
+		public ServiceBusWithHandlersBuilder(
+            IServiceBus serviceBus, 
+            IHandlerActivator handlerActivator, 
+            ILogger logger, 
+            IScheduledMessageRepository scheduledMessageRepository)
 		{
 			_serviceBus = serviceBus;
 			_handlerActivator = handlerActivator;
 			_logger = logger;
-		}
+            _scheduledMessageRepository = scheduledMessageRepository;
+        }
 
 		public ServiceBusWithHandlersBuilder CreateServiceBus()
 		{
@@ -143,7 +149,7 @@ namespace HighIronRanch.Azure.ServiceBus
 
 		public async Task<ServiceBusWithHandlers> BuildAsync()
 		{
-			var bus = new ServiceBusWithHandlers(_serviceBus, _handlerActivator, _logger);
+			var bus = new ServiceBusWithHandlers(_serviceBus, _handlerActivator, _logger, _scheduledMessageRepository);
 
 		    ServiceBusEnvironment.SystemConnectivity.Mode = ConnectivityMode.Https;
 

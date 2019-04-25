@@ -73,6 +73,7 @@
     <Compile Include="BusCommandHandler.cs" />
     <Compile Include="BusCommandHandlerFactory.cs" />
     <Compile Include="BusEventHandler.cs" />
+    <Compile Include="EnqueueOptions.cs" />
     <Compile Include="EventSessionHandlerFactory.cs" />
     <Compile Include="IServiceBusTypeStateService.cs" />
     <Compile Include="IServiceBusWithHandlers.cs" />

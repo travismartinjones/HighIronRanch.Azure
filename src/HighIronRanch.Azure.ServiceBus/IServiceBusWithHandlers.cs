@@ -8,6 +8,7 @@ namespace HighIronRanch.Azure.ServiceBus
     {
         void UseJsonMessageSerialization(bool useJsonSerialization);
         Task SendAsync(ICommand command, DateTime? enqueueTime = null);
+        Task SendAsync(ICommand command, EnqueueOptions options);
         Task PublishAsync(IEvent evt);
         Task<long> GetMessageCount(Type type);
         Task<long> GetMessageCount(Type type, string sessionId);

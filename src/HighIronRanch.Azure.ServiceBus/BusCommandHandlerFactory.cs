@@ -11,6 +11,7 @@ namespace HighIronRanch.Azure.ServiceBus
         private readonly IHandlerActivator _handlerActivator;
         private readonly IDictionary<Type, Type> _queueHandlers;
         private readonly ILogger _logger;
+        private readonly IScheduledMessageRepository _scheduledMessageRepository;
         private readonly string _loggerContext;
         private readonly bool _useJsonSerialization;
 
@@ -18,6 +19,7 @@ namespace HighIronRanch.Azure.ServiceBus
             IHandlerActivator handlerActivator,
             IDictionary<Type, Type> queueHandlers,
             ILogger logger,
+            IScheduledMessageRepository scheduledMessageRepository,
             string loggerContext,
             bool useJsonSerialization
         )
@@ -25,6 +27,7 @@ namespace HighIronRanch.Azure.ServiceBus
             _handlerActivator = handlerActivator;
             _queueHandlers = queueHandlers;
             _logger = logger;
+            _scheduledMessageRepository = scheduledMessageRepository;
             _loggerContext = loggerContext;
             _useJsonSerialization = useJsonSerialization;
         }
@@ -35,6 +38,7 @@ namespace HighIronRanch.Azure.ServiceBus
                 _handlerActivator,
                 _queueHandlers,
                 _logger,
+                _scheduledMessageRepository,
                 _loggerContext,
                 _useJsonSerialization);
         }

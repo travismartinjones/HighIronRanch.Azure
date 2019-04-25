@@ -14,6 +14,7 @@ namespace HighIronRanch.Azure.ServiceBus
         private readonly IHandlerActivator _handlerActivator;
         private readonly IDictionary<Type, Type> _queueHandlers;
         private readonly ILogger _logger;
+        private readonly IScheduledMessageRepository _scheduledMessageRepository;
         private readonly string _loggerContext;
         private readonly bool _useJsonSerialization;
         private const int MaximumCommandDeliveryCount = 10;
@@ -21,13 +22,15 @@ namespace HighIronRanch.Azure.ServiceBus
         public BusCommandHandler(
             IHandlerActivator handlerActivator,
             IDictionary<Type, Type> queueHandlers,
-            ILogger logger,
+            ILogger logger,            
+            IScheduledMessageRepository scheduledMessageRepository,
             string loggerContext,
             bool useJsonSerialization)
         {
             _handlerActivator = handlerActivator;
             _queueHandlers = queueHandlers;
             _logger = logger;
+            _scheduledMessageRepository = scheduledMessageRepository;
             _loggerContext = loggerContext;
             _useJsonSerialization = useJsonSerialization;
         }
@@ -60,13 +63,14 @@ namespace HighIronRanch.Azure.ServiceBus
                 if (handleMethodInfo != null)
                 {
                     var stopwatch = new Stopwatch();					   
-                    _logger.Information(_loggerContext, "Handling Command {0} {1}", messageType, handlerType);                        
+                    _logger.Information(_loggerContext, "Handling Command {0} {1}", messageType, handlerType);                      
                     stopwatch.Start();
                     await ((Task) handleMethodInfo?.Invoke(handler, new[] {message, new CommandActions(messageToHandle)})).ConfigureAwait(false);
                     stopwatch.Stop();
                     _logger.Information(_loggerContext, "Handled Command {0} {1} in {2}s", messageType, handlerType, stopwatch.ElapsedMilliseconds/1000.0);
                 }
                 
+                await _scheduledMessageRepository.Delete(messageToHandle.SessionId, messageToHandle.MessageId);
                 await messageToHandle.CompleteAsync().ConfigureAwait(false);
                 if(session != null)
                     await session.CloseAsync().ConfigureAwait(false);
@@ -117,7 +121,7 @@ namespace HighIronRanch.Azure.ServiceBus
                     _logger.Warning(_loggerContext, ex, "Command Warning {0} retry {1}", messageType, messageToHandle.DeliveryCount);
                 else if(alertLevel == AlertLevel.Info)
                     _logger.Information(_loggerContext, ex, "Command Info {0} retry {1}", messageType, messageToHandle.DeliveryCount);
-                await AbandonMessage(messageToHandle, session);
+                await AbandonMessage(messageToHandle, session).ConfigureAwait(false);
             }
             catch (Exception ex2)
             {
