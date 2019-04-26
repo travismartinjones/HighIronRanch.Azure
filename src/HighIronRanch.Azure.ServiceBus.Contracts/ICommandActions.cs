@@ -1,9 +1,9 @@
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 
 namespace HighIronRanch.Azure.ServiceBus.Contracts
 {
-	public interface ICommandActions
-	{
-		Task RenewLockAsync();
-	}
+    public interface ICommandActions
+    {
+        Task RenewLockAsync();
+    }
 }

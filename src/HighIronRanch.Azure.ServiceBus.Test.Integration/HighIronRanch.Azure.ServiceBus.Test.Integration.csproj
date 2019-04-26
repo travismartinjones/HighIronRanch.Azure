@@ -91,17 +91,9 @@
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\HighIronRanch.Azure.ServiceBus.Contracts\HighIronRanch.Azure.ServiceBus.Contracts.csproj">
-      <Project>{a08fe16f-d84e-4457-9dbb-a6d07113e144}</Project>
-      <Name>HighIronRanch.Azure.ServiceBus.Contracts</Name>
-    </ProjectReference>
     <ProjectReference Include="..\HighIronRanch.Azure.ServiceBus.Test.Common\HighIronRanch.Azure.ServiceBus.Test.Common.csproj">
       <Project>{a500165c-baaf-4ec1-9174-f9fe0420a328}</Project>
       <Name>HighIronRanch.Azure.ServiceBus.Test.Common</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\HighIronRanch.Azure.ServiceBus\HighIronRanch.Azure.ServiceBus.csproj">
-      <Project>{e874a4ad-8c4d-4ca8-a8a7-6320dff04a5c}</Project>
-      <Name>HighIronRanch.Azure.ServiceBus</Name>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

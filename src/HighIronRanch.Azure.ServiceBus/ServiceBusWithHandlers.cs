@@ -2,11 +2,13 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using HighIronRanch.Azure.ServiceBus.Contracts;
 using HighIronRanch.Core.Services;
-using Microsoft.ServiceBus.Messaging;
+using Microsoft.Azure.ServiceBus;
+using Microsoft.Azure.ServiceBus.InteropExtensions;
 using Newtonsoft.Json;
 
 namespace HighIronRanch.Azure.ServiceBus
@@ -20,9 +22,7 @@ namespace HighIronRanch.Azure.ServiceBus
         // in this github example by microsoft, they changed their initial 100 (see comments) to 10, likely due to the same issue
         // https://github.com/Azure/azure-service-bus/blob/master/samples/DotNet/Microsoft.ServiceBus.Messaging/Prefetch/Program.cs
 	    private static int MessagePrefetchSize = 10;
-		private readonly IServiceBus _serviceBus;
-		private bool _hasMultipleDeployments = true;
-		private bool _useJsonSerialization = true;
+		private readonly IServiceBus _serviceBus;			
 		private readonly IHandlerActivator _handlerActivator;
 		private readonly ILogger _logger;
         private readonly IScheduledMessageRepository _scheduledMessageRepository;
@@ -51,38 +51,8 @@ namespace HighIronRanch.Azure.ServiceBus
 			_handlerActivator = handlerActivator;
 			_logger = logger;
             _scheduledMessageRepository = scheduledMessageRepository;
-        }
+        }        
         
-		/// <summary>
-		/// When true, messages are serialized as json which is humanly readable in 
-		/// Service Bus Explorer. Otherwise, messages are serialized with Azure
-		/// Service Bus' default method which is not humanly readable.
-		/// Json serialization is required when using multiple deployments.
-		/// Default is true.
-		/// </summary>
-		public void UseJsonMessageSerialization(bool useJsonSerialization)
-		{
-			if (!useJsonSerialization && _hasMultipleDeployments)
-				throw new ArgumentException("Json serialization is required when using multiple deployments.");
-
-			_useJsonSerialization = useJsonSerialization;
-		}
-
-		/// <summary>
-		/// When true, tells ServiceBus to only execute EventHandlers once across multiple 
-		/// deployments such as a webfarm. Otherwise, event handling a bit simpler in a
-		/// standalone deployment where redundancy is not important. Json serialization 
-		/// is required when using multiple deployments.
-		/// Default is true.
-		/// </summary>
-		public void HasMultipleDeployments(bool hasMultipleDeployments)
-		{
-			if (hasMultipleDeployments && !_useJsonSerialization)
-				throw new ArgumentException("Json serialization is required when using multiple deployments.");
-
-			_hasMultipleDeployments = hasMultipleDeployments;
-		}
-
 		internal async Task CreateQueueAsync(Type type)
 		{
 			if (_queueClients.ContainsKey(type))
@@ -130,20 +100,13 @@ namespace HighIronRanch.Azure.ServiceBus
             if (options.EnqueueTime.HasValue && (options.EnqueueTime.Value - DateTime.UtcNow).TotalSeconds < 2)
                 options.EnqueueTime = null;
 
-			BrokeredMessage brokeredMessage;
+            var message = JsonConvert.SerializeObject(command);
+            var brokeredMessage = new Message(Encoding.UTF8.GetBytes(message))
+            {
+                MessageId = command.MessageId.ToString(), ContentType = command.GetType().Name
+            };
 
-			if (_useJsonSerialization)
-			{
-				var message = JsonConvert.SerializeObject(command);
-			    brokeredMessage = new BrokeredMessage(message) {MessageId = command.MessageId.ToString()};
-			}
-			else
-			{
-				brokeredMessage = new BrokeredMessage(command);
-			}
-
-			brokeredMessage.ContentType = command.GetType().AssemblyQualifiedName;
-			if (isCommand)
+            if (isCommand)
 			{
 				brokeredMessage.SessionId = ((IAggregateCommand) command).GetAggregateId();                
 			}
@@ -235,12 +198,8 @@ namespace HighIronRanch.Azure.ServiceBus
 
 			var client = await _serviceBus.CreateTopicClientAsync(type.FullName);            
 			_topicClients.Add(type, client);
-
-			// Create queues for the events in a multiple deployment environment
-			if (_hasMultipleDeployments)
-			{
-				await CreateQueueAsync(type);
-			}
+            
+			await CreateQueueAsync(type);
 		}
 
 		internal async Task CreateHandledEventAsync(Type handlerType)
@@ -269,20 +228,11 @@ namespace HighIronRanch.Azure.ServiceBus
 		{
 			var client = _topicClients[evt.GetType()];
 
-			BrokeredMessage brokeredMessage;
-
-		    var isAggregateEvent = evt is IAggregateEvent;
-
-            if (_useJsonSerialization)
-			{
-				var message = JsonConvert.SerializeObject(evt);
-			    brokeredMessage = new BrokeredMessage(message) {MessageId = evt.MessageId.ToString()};
-			}
-			else
-			{
-				brokeredMessage = new BrokeredMessage(evt);
-			}
-
+            var isAggregateEvent = evt is IAggregateEvent;
+            
+			var message = JsonConvert.SerializeObject(evt);
+			var brokeredMessage = new Message(Encoding.UTF8.GetBytes(message)) {MessageId = evt.MessageId.ToString()};
+			
 		    if (isAggregateEvent)
 		    {
 		        var aggregateEvent = ((IAggregateEvent) evt);
@@ -294,33 +244,7 @@ namespace HighIronRanch.Azure.ServiceBus
             _logger.Debug(LoggerContext, "Publishing event {0} to {1}", evt.GetType().Name, client.GetType().Name);
 			await client.SendAsync(brokeredMessage);
 		}
-
-	    public async Task<long> GetMessageCount(Type type)
-	    {
-	        if (type.DoesTypeImplementInterface(typeof(ICommand)))
-	        {
-	            return await _serviceBus.GetQueueLengthAsync(type.FullName);
-	        }
-
-	        if (!type.DoesTypeImplementInterface(typeof(ICommand)))
-	        {
-	            return await _serviceBus.GetTopicLengthAsync(type.FullName);
-	        }
-
-	        return 0;
-	    }
-
-	    public async Task<long> GetMessageCount(Type type, string sessionId)
-	    {
-	        if (type.DoesTypeImplementInterface(typeof(ICommand)))
-	        {
-	            var isCommand = typeof(IAggregateCommand).IsAssignableFrom(type);
-	            return await _serviceBus.GetQueueSessionLengthAsync(type.FullName, isCommand, sessionId);
-	        }
-            
-	        return 0;
-	    }
-
+        
         private TimeSpan GetWaitTimeForType(Type messageType)
         {
             var sessionAttribute = (SessionAttribute)Attribute.GetCustomAttribute(messageType, typeof(SessionAttribute));
@@ -329,33 +253,33 @@ namespace HighIronRanch.Azure.ServiceBus
             return new TimeSpan(0, 0, sessionAttribute.TimeoutSeconds);
         }
         
-	    private async Task HandleEventForMultipleDeployments(BrokeredMessage eventToHandle)
+	    private async Task HandleEventForMultipleDeployments(Message eventToHandle)
 	    {
-	        try
-	        {			    
-	            var eventType = Type.GetType(eventToHandle.ContentType);
-	            if (eventType == null) return;
-	            // Should be using json serialization
-	            var theEvent = JsonConvert.DeserializeObject(eventToHandle.GetBody<string>(), eventType);
+            var eventType = Type.GetType(eventToHandle.ContentType);
+            if (eventType == null) return;
+            var client = _queueClients[eventType];
 
-	            var client = _queueClients[eventType];
+	        try
+	        {			    	            	            
+	            // Should be using json serialization
+	            var theEvent = JsonConvert.DeserializeObject(eventToHandle.GetBody<string>(), eventType);	            
 
 	            var message = JsonConvert.SerializeObject(theEvent);
-	            var brokeredMessage = new BrokeredMessage(message)
+	            var brokeredMessage = new Message(Encoding.UTF8.GetBytes(message))
 	            {
 	                MessageId = message.GetHashCode().ToString(),
 	                ContentType = eventToHandle.ContentType
 	            };
 
-	            client.Send(brokeredMessage);
+	            await client.SendAsync(brokeredMessage);
 	        }
 	        catch (Exception ex)
 	        {
 	            try
 	            {
 	                _logger.Error("ServiceBusWithHandlers", ex, " Abandoning {0}: {1}", eventToHandle.MessageId, ex.Message);
-	                await Task.Delay((int) (100 * Math.Pow(eventToHandle.DeliveryCount, 2)));
-	                eventToHandle.Abandon();
+	                await Task.Delay((int) (100 * Math.Pow(eventToHandle.SystemProperties.DeliveryCount, 2)));
+	                await client.AbandonAsync(eventToHandle.SystemProperties.LockToken);
 	            }
 	            catch (Exception ex2)
 	            {
@@ -365,114 +289,120 @@ namespace HighIronRanch.Azure.ServiceBus
 	    }
 
 	    public async Task StartHandlers()
-		{
-		    var commandSessionHandlerFactory = new CommandSessionHandlerFactory(_handlerActivator, _queueHandlers, _logger, _scheduledMessageRepository, LoggerContext, _useJsonSerialization);
-            var eventSessionHandlerFactory = new EventSessionHandlerFactory(_handlerActivator, _eventHandlers, _queueHandlers, _logger, LoggerContext, _useJsonSerialization);
-
-#pragma warning disable 4014
-		    Task.Run(() =>
-		    {
-		        Parallel.ForEach(_queueHandlers.Keys, async messageType =>
-		        {
-		            try
-		            {		                
-		                var client = _queueClients[messageType];
-		                client.PrefetchCount = MessagePrefetchSize;
-		                if (typeof(IAggregateCommand).IsAssignableFrom(messageType))
-		                {
-		                    var options = new SessionHandlerOptions
-		                    {
-		                        AutoComplete = false,
-		                    };
-                            var waitTime = GetWaitTimeForType(messageType);
-                            options.MessageWaitTimeout = options.MessageWaitTimeout < waitTime ? waitTime : options.MessageWaitTimeout;
-                            options.AutoRenewTimeout = options.AutoRenewTimeout < waitTime ? new TimeSpan(waitTime.Ticks * 5) : options.AutoRenewTimeout;
-
-                            await client.RegisterSessionHandlerFactoryAsync(commandSessionHandlerFactory,options);
-		                }
-		                else
-		                {
-		                    var commandHandler = new BusCommandHandler(_handlerActivator, _queueHandlers, _logger, _scheduledMessageRepository,
-		                        LoggerContext, _useJsonSerialization);
-		                    client.OnMessageAsync(async c => await commandHandler.OnMessageAsync(null, c), new OnMessageOptions
-		                    {
-		                        AutoComplete = false,
-		                        MaxConcurrentCalls = 10
-		                    });
-		                }
-		            }
-		            catch (Exception ex)
-		            {
-                        _logger.Error(LoggerContext, ex, "Error starting command handler for type {0}",messageType.ToString());
-		            }
-		        });
-
-		        Parallel.ForEach(_eventHandlers.Keys, async eventType =>
-		        {
-		            try
-		            {
-		                var isAggregateEvent = typeof(IAggregateEvent).IsAssignableFrom(eventType);
-
-		                var client = await _serviceBus.CreateSubscriptionClientAsync(eventType.FullName, eventType.Name, isAggregateEvent);
-
-		                if (_hasMultipleDeployments)
-		                {
-		                    if (isAggregateEvent)
-		                    {
-		                        var options = new SessionHandlerOptions
-		                        {
-		                            AutoComplete = false,
-		                        };
-                                var waitTime = GetWaitTimeForType(eventType);
-                                options.MessageWaitTimeout = options.MessageWaitTimeout < waitTime ? waitTime : options.MessageWaitTimeout;
-                                options.AutoRenewTimeout = options.AutoRenewTimeout < waitTime ? new TimeSpan(waitTime.Ticks * 5) : options.AutoRenewTimeout;
-                                await client.RegisterSessionHandlerFactoryAsync(eventSessionHandlerFactory, options);
-		                    }
-		                    else
-		                        client.OnMessageAsync(HandleEventForMultipleDeployments, new OnMessageOptions
-		                        {
-		                            AutoComplete = false,
-		                            MaxConcurrentCalls = 10
-		                        });
-                            
-		                    var qclient = _queueClients[eventType];
-		                    var eventHandler = new BusEventHandler(_handlerActivator, _eventHandlers, _logger, LoggerContext, _useJsonSerialization);
-		                    qclient.OnMessageAsync(async e => await eventHandler.OnMessageAsync(null, e), new OnMessageOptions
-		                    {
-		                        AutoComplete = false,
-		                        MaxConcurrentCalls = 10
-		                    });		                    
-		                }
-		                else
-		                {
-		                    if (isAggregateEvent)
-		                    {
-		                        var options = new SessionHandlerOptions
-		                        {
-		                            AutoComplete = false,
-		                        };
-                                var waitTime = GetWaitTimeForType(eventType);
-                                options.MessageWaitTimeout = options.MessageWaitTimeout < waitTime ? waitTime : options.MessageWaitTimeout;
-                                options.AutoRenewTimeout = options.AutoRenewTimeout < waitTime ? new TimeSpan(waitTime.Ticks * 5) : options.AutoRenewTimeout;
-                                await client.RegisterSessionHandlerFactoryAsync(eventSessionHandlerFactory,options);
-		                    }
-		                    else
-		                    {
-		                        var eventHandler = new BusEventHandler(_handlerActivator, _eventHandlers, _logger, LoggerContext, _useJsonSerialization);		                        
-		                        client.OnMessageAsync(async e => await eventHandler.OnMessageAsync(null, e), new OnMessageOptions
-		                        {
-		                            AutoComplete = false,
-		                            MaxConcurrentCalls = 10
-		                        });
-		                    }
-		                }
-		            }
-		            catch (Exception ex)
-		            {
-		                _logger.Error(LoggerContext, ex, "Error starting event handler for type {0}", eventType.ToString());
-		            }
-		        });
-		    });
+		{		    
+            StartCommandHandlers();
+            StartEventHandlers();
 		}
-	}
+
+        private void StartEventHandlers()
+        {
+            Parallel.ForEach(_eventHandlers.Keys, async eventType =>
+            {
+                try
+                {
+                    var isAggregateEvent = typeof(IAggregateEvent).IsAssignableFrom(eventType);
+                    var client = await _serviceBus.CreateSubscriptionClientAsync(eventType.FullName, eventType.Name, isAggregateEvent);
+
+                    if (isAggregateEvent)
+                    {
+                        var options = new SessionHandlerOptions(ExceptionReceivedHandler)
+                        {
+                            AutoComplete = false,
+                        };
+                        var waitTime = GetWaitTimeForType(eventType);
+                        options.MessageWaitTimeout = options.MessageWaitTimeout < waitTime
+                            ? waitTime
+                            : options.MessageWaitTimeout;
+                        options.MaxAutoRenewDuration = options.MaxAutoRenewDuration < waitTime
+                            ? new TimeSpan(waitTime.Ticks * 5)
+                            : options.MaxAutoRenewDuration;
+                        
+                        client.RegisterSessionHandler(async (session, message, cancellationToken) =>
+                        {
+                            await new BusEventHandler(_handlerActivator, _eventHandlers, _logger, LoggerContext).OnMessageAsync(client, message).ConfigureAwait(false);
+                        }, options);
+                    }
+                    else
+                    {                     
+                        var options = new MessageHandlerOptions(ExceptionReceivedHandler)
+                        {
+                            AutoComplete = false,
+                        };
+                        var waitTime = GetWaitTimeForType(eventType);
+                        options.MaxConcurrentCalls = 10;
+                        options.MaxAutoRenewDuration = options.MaxAutoRenewDuration < waitTime
+                            ? new TimeSpan(waitTime.Ticks * 5)
+                            : options.MaxAutoRenewDuration;
+
+                        client.RegisterMessageHandler(async (message, cancellationToken) =>
+                        {
+                            await new BusEventHandler(_handlerActivator, _eventHandlers, _logger, LoggerContext).OnMessageAsync(client, message).ConfigureAwait(false);
+                        }, options);
+                    }                    
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error(LoggerContext, ex, "Error starting event handler for type {0}", eventType.ToString());
+                }
+            });
+        }
+
+        private void StartCommandHandlers()
+        {
+            Parallel.ForEach(_queueHandlers.Keys, async messageType =>
+            {
+                try
+                {
+                    var client = _queueClients[messageType];
+                    client.PrefetchCount = MessagePrefetchSize;
+                    if (typeof(IAggregateCommand).IsAssignableFrom(messageType))
+                    {
+                        var options = new SessionHandlerOptions(ExceptionReceivedHandler)
+                        {
+                            AutoComplete = false,
+                        };
+                        var waitTime = GetWaitTimeForType(messageType);
+                        options.MessageWaitTimeout =
+                            options.MessageWaitTimeout < waitTime ? waitTime : options.MessageWaitTimeout;
+                        options.MaxAutoRenewDuration = options.MaxAutoRenewDuration < waitTime
+                            ? new TimeSpan(waitTime.Ticks * 5)
+                            : options.MaxAutoRenewDuration;
+
+                        client.RegisterSessionHandler(async (session, message, cancellationToken) =>
+                        {
+                            var commandHandler = new BusCommandHandler(_handlerActivator, _queueHandlers, _logger, _scheduledMessageRepository, LoggerContext);
+                            await commandHandler.OnMessageAsync(client, message, async () => await session.RenewSessionLockAsync().ConfigureAwait(false));
+                        }, options);
+                    }
+                    else
+                    {
+                        var options = new MessageHandlerOptions(ExceptionReceivedHandler)
+                        {
+                            AutoComplete = false,
+                        };
+                        var waitTime = GetWaitTimeForType(messageType);
+                        options.MaxConcurrentCalls = 10;
+                        options.MaxAutoRenewDuration = options.MaxAutoRenewDuration < waitTime
+                            ? new TimeSpan(waitTime.Ticks * 5)
+                            : options.MaxAutoRenewDuration;
+
+                        var commandHandler = new BusCommandHandler(_handlerActivator, _queueHandlers, _logger, _scheduledMessageRepository, LoggerContext);
+                        client.RegisterMessageHandler(async (message, cancellationToken) =>
+                        {
+                            await commandHandler.OnMessageAsync(client, message, async () => { });
+                        }, options);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error(LoggerContext, ex, "Error starting command handler for type {0}", messageType.ToString());
+                }
+            });
+        }
+
+        private async Task ExceptionReceivedHandler(ExceptionReceivedEventArgs arg)
+        {
+            _logger.Error(LoggerContext, arg.Exception, $"Session error received {arg.ExceptionReceivedContext.Action} | { arg.ExceptionReceivedContext.Endpoint} | { arg.ExceptionReceivedContext.ClientId} | { arg.ExceptionReceivedContext.EntityPath}");
+        }
+    }
 }

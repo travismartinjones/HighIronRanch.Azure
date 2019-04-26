@@ -1,21 +1,23 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Text;
 using System.Threading.Tasks;
 using HighIronRanch.Azure.ServiceBus.Contracts;
-using Microsoft.ServiceBus.Messaging;
 
-namespace HighIronRanch.Azure.ServiceBus
+namespace HighIronRanch.Azure.ServiceBus.Standard
 {
-	internal class CommandActions : ICommandActions
-	{
-		private readonly BrokeredMessage _message;
+    public class CommandActions : ICommandActions
+    {
+        private readonly Func<Task> _renewLock;
 
-		public CommandActions(BrokeredMessage message)
-		{
-			_message = message;
-		}
+        public CommandActions(Func<Task> renewLock)
+        {
+            _renewLock = renewLock;            
+        }
 
-		public async Task RenewLockAsync()
-		{
-			await _message.RenewLockAsync();
-		}
-	}
+        public async Task RenewLockAsync()
+        {
+            await _renewLock.Invoke().ConfigureAwait(false);
+        }
+    }
 }

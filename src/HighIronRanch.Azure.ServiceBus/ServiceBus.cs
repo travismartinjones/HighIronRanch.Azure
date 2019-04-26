@@ -2,8 +2,8 @@
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using Microsoft.ServiceBus;
-using Microsoft.ServiceBus.Messaging;
+using Microsoft.Azure.ServiceBus;
+using Microsoft.Azure.ServiceBus.Management;
 
 namespace HighIronRanch.Azure.ServiceBus
 {
@@ -19,21 +19,15 @@ namespace HighIronRanch.Azure.ServiceBus
         Task CreateQueueAsync(string name, bool isSessionRequired);
         Task<QueueClient> CreateQueueClientAsync(string name);
         Task<QueueClient> CreateQueueClientAsync(string name, bool isSessionRequired);
-        Task DeleteQueueAsync(string name);
         Task<TopicClient> CreateTopicClientAsync(string name);
-        Task DeleteTopicAsync(string name);
         Task<SubscriptionClient> CreateSubscriptionClientAsync(string topicName, string subscriptionName, bool isSessionRequired);
-        Task DeleteSubscriptionAsync(string topicName, string subscriptionName);
-        Task<long> GetQueueLengthAsync(string name);
-        Task<long> GetTopicLengthAsync(string name);
-        Task<long> GetQueueSessionLengthAsync(string name, bool isCommand, string sessionId);
     }
 
     public class ServiceBus : IServiceBus
     {
         private readonly IServiceBusSettings _settings;
         private readonly IServiceBusTypeStateService _serviceBusTypeStateService;
-        protected NamespaceManager _manager;
+        protected ManagementClient _manager;
 
         public ServiceBus(IServiceBusSettings settings, INamespaceManagerBuilder managerBuilder, IServiceBusTypeStateService serviceBusTypeStateService)
         {
@@ -97,7 +91,7 @@ namespace HighIronRanch.Azure.ServiceBus
 
             if (isPreviouslyCreated) return;
 
-            if (_manager.QueueExists(cleansedName))
+            if (await _manager.QueueExistsAsync(cleansedName))
             {
                 await _serviceBusTypeStateService.OnQueueCreated(cleansedName);
                 return;
@@ -123,26 +117,20 @@ namespace HighIronRanch.Azure.ServiceBus
             var queueName = CreateQueueName(name);            
             await CreateCleansedNameQueueAsync(queueName, isSessionRequired);
 
-            return QueueClient.CreateFromConnectionString(_settings.AzureServiceBusConnectionString, queueName);
+            return new QueueClient(_settings.AzureServiceBusConnectionString, queueName);
         }
-
-        public async Task DeleteQueueAsync(string name)
-        {
-            var cleansedName = CreateQueueName(name);
-            await _manager.DeleteQueueAsync(cleansedName);
-        }
-
+        
         public async Task<TopicClient> CreateTopicClientAsync(string name)
         {
             var topicName = CreateTopicName(name);
             
             var isPreviouslyCreated = await _serviceBusTypeStateService.GetIsTopicCreated(topicName);
 
-            var topicClient = TopicClient.CreateFromConnectionString(_settings.AzureServiceBusConnectionString, topicName);;
+            var topicClient = new TopicClient(_settings.AzureServiceBusConnectionString, topicName);;
 
             if (isPreviouslyCreated) return topicClient;
 
-            if (_manager.TopicExists(topicName))
+            if (await _manager.TopicExistsAsync(topicName))
             {
                 await _serviceBusTypeStateService.OnTopicCreated(topicName);
                 return topicClient;
@@ -153,13 +141,7 @@ namespace HighIronRanch.Azure.ServiceBus
             await _serviceBusTypeStateService.OnTopicCreated(topicName);
             return topicClient;
         }
-
-        public async Task DeleteTopicAsync(string name)
-        {
-            var topicName = CreateTopicName(name);
-            await _manager.DeleteTopicAsync(topicName);
-        }
-
+        
         public async Task<SubscriptionClient> CreateSubscriptionClientAsync(string topicName, string subscriptionName, bool isSessionRequired)
         {
             var cleansedTopicName = CreateTopicName(topicName);
@@ -183,33 +165,7 @@ namespace HighIronRanch.Azure.ServiceBus
                 await _manager.CreateSubscriptionAsync(sd);
             }
 
-            return SubscriptionClient.CreateFromConnectionString(_settings.AzureServiceBusConnectionString, cleansedTopicName, cleansedSubscriptionName);
-        }
-
-        public async Task DeleteSubscriptionAsync(string topicName, string subscriptionName)
-        {
-            var cleansedTopicName = CreateTopicName(topicName);
-            var cleansedSubscriptionName = CreateSubscriptionName(subscriptionName);
-            await _manager.DeleteSubscriptionAsync(cleansedTopicName, cleansedSubscriptionName);
-        }
-
-        public async Task<long> GetQueueLengthAsync(string name)
-        {
-            var queue = await _manager.GetQueueAsync(CreateQueueName(name));
-            return queue.MessageCountDetails.ActiveMessageCount;
-        }
-
-        public async Task<long> GetTopicLengthAsync(string name)
-        {
-            var topic = await _manager.GetTopicAsync(CreateTopicName(name));
-            return topic.MessageCountDetails.ActiveMessageCount;
-        }
-
-        public async Task<long> GetQueueSessionLengthAsync(string name, bool isCommand, string sessionId)
-        {
-            var queue = await CreateQueueClientAsync(name, isCommand);
-            var sessions = await queue.GetMessageSessionsAsync();
-            return sessions.Count(x => x.SessionId == sessionId);
-        }
+            return new SubscriptionClient(_settings.AzureServiceBusConnectionString, cleansedTopicName, cleansedSubscriptionName);
+        }        
     }
 }

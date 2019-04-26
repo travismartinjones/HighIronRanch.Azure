@@ -1,5 +1,5 @@
 ﻿using System;
-using Microsoft.ServiceBus;
+using Microsoft.Azure.ServiceBus.Management;
 
 namespace HighIronRanch.Azure.ServiceBus
 {
@@ -8,7 +8,7 @@ namespace HighIronRanch.Azure.ServiceBus
 		NamespaceManagerBuilder CreateNamespaceBuilder();
 		NamespaceManagerBuilder WithConnectionString(string connectionString);
 		bool IsValid();
-		NamespaceManager Build();
+        ManagementClient  Build();
 	}
 
 	public class NamespaceManagerBuilder : INamespaceManagerBuilder
@@ -34,10 +34,10 @@ namespace HighIronRanch.Azure.ServiceBus
 			return true;
 		}
 
-		public NamespaceManager Build()
+		public ManagementClient  Build()
 		{
 			if(IsValid())
-				return NamespaceManager.CreateFromConnectionString(_connectionString);
+				return new ManagementClient(_connectionString);
 
 			throw new InvalidOperationException("Invalid configuration");
 		}

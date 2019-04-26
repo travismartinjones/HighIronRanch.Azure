@@ -1,14 +1,8 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 14
-VisualStudioVersion = 14.0.25420.1
+# Visual Studio 15
+VisualStudioVersion = 15.0.28307.136
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HighIronRanch.Azure.TableStorage", "HighIronRanch.Azure.TableStorage\HighIronRanch.Azure.TableStorage.csproj", "{DA7CCC9C-F2B0-47DB-B50A-4582671E0264}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HighIronRanch.Azure.ServiceBus", "HighIronRanch.Azure.ServiceBus\HighIronRanch.Azure.ServiceBus.csproj", "{E874A4AD-8C4D-4CA8-A8A7-6320DFF04A5C}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HighIronRanch.Azure.ServiceBus.Contracts", "HighIronRanch.Azure.ServiceBus.Contracts\HighIronRanch.Azure.ServiceBus.Contracts.csproj", "{A08FE16F-D84E-4457-9DBB-A6D07113E144}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HighIronRanch.Azure.ServiceBus.Test.Integration", "HighIronRanch.Azure.ServiceBus.Test.Integration\HighIronRanch.Azure.ServiceBus.Test.Integration.csproj", "{366B9551-E784-46A8-8BD8-ED0DB4DEB39E}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HighIronRanch.Azure.ServiceBus.Test.Topics", "HighIronRanch.Azure.ServiceBus.Test.Topics\HighIronRanch.Azure.ServiceBus.Test.Topics.csproj", "{5572B92D-8BC6-41A5-9422-73135B8413BD}"
@@ -21,24 +15,18 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HighIronRanch.Azure.Documen
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HighIronRanch.Azure.DocumentDb.Test.Integration", "HighIronRanch.Azure.DocumentDb.Test.Integration\HighIronRanch.Azure.DocumentDb.Test.Integration.csproj", "{03961703-0F8B-4970-B5FC-85B0CB83508B}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HighIronRanch.Azure.ServiceBus", "HighIronRanch.Azure.ServiceBus\HighIronRanch.Azure.ServiceBus.csproj", "{4F4870B4-2786-4BE2-9824-724E0CC453B1}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HighIronRanch.Azure.ServiceBus.Contracts", "HighIronRanch.Azure.ServiceBus.Contracts\HighIronRanch.Azure.ServiceBus.Contracts.csproj", "{DFD2BD08-91C3-4F4B-B25A-2908B0F52C38}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HighIronRanch.Azure.TableStorage", "HighIronRanch.Azure.TableStorage\HighIronRanch.Azure.TableStorage.csproj", "{3931F0D2-1DEE-47A7-94D9-B04506E23EC4}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{DA7CCC9C-F2B0-47DB-B50A-4582671E0264}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{DA7CCC9C-F2B0-47DB-B50A-4582671E0264}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{DA7CCC9C-F2B0-47DB-B50A-4582671E0264}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{DA7CCC9C-F2B0-47DB-B50A-4582671E0264}.Release|Any CPU.Build.0 = Release|Any CPU
-		{E874A4AD-8C4D-4CA8-A8A7-6320DFF04A5C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{E874A4AD-8C4D-4CA8-A8A7-6320DFF04A5C}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{E874A4AD-8C4D-4CA8-A8A7-6320DFF04A5C}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{E874A4AD-8C4D-4CA8-A8A7-6320DFF04A5C}.Release|Any CPU.Build.0 = Release|Any CPU
-		{A08FE16F-D84E-4457-9DBB-A6D07113E144}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{A08FE16F-D84E-4457-9DBB-A6D07113E144}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{A08FE16F-D84E-4457-9DBB-A6D07113E144}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{A08FE16F-D84E-4457-9DBB-A6D07113E144}.Release|Any CPU.Build.0 = Release|Any CPU
 		{366B9551-E784-46A8-8BD8-ED0DB4DEB39E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{366B9551-E784-46A8-8BD8-ED0DB4DEB39E}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{366B9551-E784-46A8-8BD8-ED0DB4DEB39E}.Release|Any CPU.ActiveCfg = Release|Any CPU
@@ -63,8 +51,23 @@ Global
 		{03961703-0F8B-4970-B5FC-85B0CB83508B}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{03961703-0F8B-4970-B5FC-85B0CB83508B}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{03961703-0F8B-4970-B5FC-85B0CB83508B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4F4870B4-2786-4BE2-9824-724E0CC453B1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4F4870B4-2786-4BE2-9824-724E0CC453B1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4F4870B4-2786-4BE2-9824-724E0CC453B1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4F4870B4-2786-4BE2-9824-724E0CC453B1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DFD2BD08-91C3-4F4B-B25A-2908B0F52C38}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DFD2BD08-91C3-4F4B-B25A-2908B0F52C38}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DFD2BD08-91C3-4F4B-B25A-2908B0F52C38}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DFD2BD08-91C3-4F4B-B25A-2908B0F52C38}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3931F0D2-1DEE-47A7-94D9-B04506E23EC4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3931F0D2-1DEE-47A7-94D9-B04506E23EC4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3931F0D2-1DEE-47A7-94D9-B04506E23EC4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3931F0D2-1DEE-47A7-94D9-B04506E23EC4}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {DB7FD37D-5583-4B21-8E4A-5E8222303020}
 	EndGlobalSection
 EndGlobal

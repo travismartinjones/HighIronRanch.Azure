@@ -183,3 +183,4 @@ FakesAssemblies/
 src/.vs/
 src/HighIronRanch.Azure.ServiceBus/publish-nuget.bat
 src/HighIronRanch.Azure.TableStorage/publish-nuget.bat
+src/HighIronRanch.Azure.ServiceBus.Contracts/publish-nuget.bat

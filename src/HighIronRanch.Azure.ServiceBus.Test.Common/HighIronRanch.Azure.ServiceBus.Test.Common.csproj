@@ -44,16 +44,6 @@
     <Compile Include="ServiceBusSettings.cs" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\HighIronRanch.Azure.ServiceBus.Contracts\HighIronRanch.Azure.ServiceBus.Contracts.csproj">
-      <Project>{a08fe16f-d84e-4457-9dbb-a6d07113e144}</Project>
-      <Name>HighIronRanch.Azure.ServiceBus.Contracts</Name>
-    </ProjectReference>
-    <ProjectReference Include="..\HighIronRanch.Azure.ServiceBus\HighIronRanch.Azure.ServiceBus.csproj">
-      <Project>{e874a4ad-8c4d-4ca8-a8a7-6320dff04a5c}</Project>
-      <Name>HighIronRanch.Azure.ServiceBus</Name>
-    </ProjectReference>
-  </ItemGroup>
-  <ItemGroup>
     <None Include="app.config" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
