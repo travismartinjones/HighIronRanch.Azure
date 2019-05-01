@@ -30,7 +30,7 @@ namespace HighIronRanch.Azure.ServiceBus
             _loggerContext = loggerContext;
         }
 
-        public async Task OnMessageAsync(SubscriptionClient client, Message eventToHandle)
+        public async Task OnMessageAsync(SubscriptionClient client, Message eventToHandle, IMessageSession session)
         {            
             var eventType = Type.GetType(eventToHandle.ContentType);
 
@@ -38,7 +38,7 @@ namespace HighIronRanch.Azure.ServiceBus
             {
                 if (eventType == null) return;
 
-                var message = JsonConvert.DeserializeObject(eventToHandle.GetBody<string>(), eventType);
+                var message = JsonConvert.DeserializeObject(System.Text.Encoding.UTF8.GetString(eventToHandle.Body), eventType);
                 
                 var handlerTypes = _eventHandlers[eventType];
 
@@ -56,11 +56,14 @@ namespace HighIronRanch.Azure.ServiceBus
                         stopwatch.ElapsedMilliseconds / 1000.0);
                 }
 
-                await client.CompleteAsync(eventToHandle.SystemProperties.LockToken).ConfigureAwait(false);                
+                if(session != null)
+                    await session.CompleteAsync(eventToHandle.SystemProperties.LockToken).ConfigureAwait(false);
+                else
+                    await client.CompleteAsync(eventToHandle.SystemProperties.LockToken).ConfigureAwait(false);
             }
             catch (TimeoutException)
             {
-                await AbandonMessage(eventToHandle, client).ConfigureAwait(false);
+                await AbandonMessage(eventToHandle, client, session).ConfigureAwait(false);
             }
             catch (Exception ex)
             {		        	        
@@ -68,13 +71,13 @@ namespace HighIronRanch.Azure.ServiceBus
                 {
                     // add in exponential spacing between retries
                     await Task.Delay(GetDelayFromDeliveryCount(eventToHandle.SystemProperties.DeliveryCount)).ConfigureAwait(false);
-                    await LogEventError(AlertLevel.Warning, ex, eventToHandle, eventType, client).ConfigureAwait(false);
-                    await AbandonMessage(eventToHandle, client).ConfigureAwait(false);
+                    await LogEventError(AlertLevel.Warning, ex, eventToHandle, eventType, client, session).ConfigureAwait(false);
+                    await AbandonMessage(eventToHandle, client, session).ConfigureAwait(false);
                 }
                 else
                 {
-                    await LogEventError(AlertLevel.Error, ex, eventToHandle, eventType, client).ConfigureAwait(false);
-                    await AbandonMessage(eventToHandle, client).ConfigureAwait(false);
+                    await LogEventError(AlertLevel.Error, ex, eventToHandle, eventType, client, session).ConfigureAwait(false);
+                    await AbandonMessage(eventToHandle, client, session).ConfigureAwait(false);
                 }
             }
         }
@@ -94,7 +97,7 @@ namespace HighIronRanch.Azure.ServiceBus
             }
         }
 
-        private async Task LogEventError(AlertLevel alertLevel, Exception ex, Message messageToHandle, Type messageType, SubscriptionClient client)
+        private async Task LogEventError(AlertLevel alertLevel, Exception ex, Message messageToHandle, Type messageType, SubscriptionClient client, IMessageSession session)
         {
             try
             {
@@ -104,7 +107,7 @@ namespace HighIronRanch.Azure.ServiceBus
                     _logger.Warning(_loggerContext, ex, "Event Warning {0} retry {1}", messageType, messageToHandle.SystemProperties.DeliveryCount);
                 else if(alertLevel == AlertLevel.Info)
                     _logger.Information(_loggerContext, ex, "Event Info {0} retry {1}", messageType, messageToHandle.SystemProperties.DeliveryCount);
-                await AbandonMessage(messageToHandle, client);
+                await AbandonMessage(messageToHandle, client, session);
             }
             catch
             {
@@ -117,9 +120,13 @@ namespace HighIronRanch.Azure.ServiceBus
             }
         }
 
-        private static async Task AbandonMessage(Message messageToHandle, SubscriptionClient client)
+        private static async Task AbandonMessage(Message messageToHandle, SubscriptionClient client,
+            IMessageSession session)
         {
-            await client.AbandonAsync(messageToHandle.SystemProperties.LockToken).ConfigureAwait(false);
+            if(session != null)
+                await session.AbandonAsync(messageToHandle.SystemProperties.LockToken).ConfigureAwait(false);
+            else
+                await client.AbandonAsync(messageToHandle.SystemProperties.LockToken).ConfigureAwait(false);
         }
     }
 }

@@ -103,7 +103,7 @@ namespace HighIronRanch.Azure.ServiceBus
             var message = JsonConvert.SerializeObject(command);
             var brokeredMessage = new Message(Encoding.UTF8.GetBytes(message))
             {
-                MessageId = command.MessageId.ToString(), ContentType = command.GetType().Name
+                MessageId = command.MessageId.ToString(), ContentType = command.GetType().AssemblyQualifiedName
             };
 
             if (isCommand)
@@ -198,8 +198,6 @@ namespace HighIronRanch.Azure.ServiceBus
 
 			var client = await _serviceBus.CreateTopicClientAsync(type.FullName);            
 			_topicClients.Add(type, client);
-            
-			await CreateQueueAsync(type);
 		}
 
 		internal async Task CreateHandledEventAsync(Type handlerType)
@@ -289,16 +287,20 @@ namespace HighIronRanch.Azure.ServiceBus
 	    }
 
 	    public async Task StartHandlers()
-		{		    
-            StartCommandHandlers();
-            StartEventHandlers();
-		}
+        {            
+            await StartCommandHandlers();
+            await StartEventHandlers();
+        }
 
-        private void StartEventHandlers()
+        private async Task StartEventHandlers()
         {
-            Parallel.ForEach(_eventHandlers.Keys, async eventType =>
-            {
-                try
+            var tasks = _eventHandlers.Keys.Select(StartEventHandler);
+            await Task.WhenAll(tasks);
+        }
+
+        private async Task StartEventHandler(Type eventType)
+        {
+            try
                 {
                     var isAggregateEvent = typeof(IAggregateEvent).IsAssignableFrom(eventType);
                     var client = await _serviceBus.CreateSubscriptionClientAsync(eventType.FullName, eventType.Name, isAggregateEvent);
@@ -315,11 +317,17 @@ namespace HighIronRanch.Azure.ServiceBus
                             : options.MessageWaitTimeout;
                         options.MaxAutoRenewDuration = options.MaxAutoRenewDuration < waitTime
                             ? new TimeSpan(waitTime.Ticks * 5)
-                            : options.MaxAutoRenewDuration;
-                        
+                            : options.MaxAutoRenewDuration;                        
                         client.RegisterSessionHandler(async (session, message, cancellationToken) =>
                         {
-                            await new BusEventHandler(_handlerActivator, _eventHandlers, _logger, LoggerContext).OnMessageAsync(client, message).ConfigureAwait(false);
+                            try
+                            {
+                                await new BusEventHandler(_handlerActivator, _eventHandlers, _logger, LoggerContext).OnMessageAsync(client, message, session).ConfigureAwait(false);
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.Error(LoggerContext, ex, "Error processing event {0}", eventType.ToString());
+                            }
                         }, options);
                     }
                     else
@@ -336,7 +344,14 @@ namespace HighIronRanch.Azure.ServiceBus
 
                         client.RegisterMessageHandler(async (message, cancellationToken) =>
                         {
-                            await new BusEventHandler(_handlerActivator, _eventHandlers, _logger, LoggerContext).OnMessageAsync(client, message).ConfigureAwait(false);
+                            try
+                            {
+                                await new BusEventHandler(_handlerActivator, _eventHandlers, _logger, LoggerContext).OnMessageAsync(client, message, null).ConfigureAwait(false);
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.Error(LoggerContext, ex, "Error processing event {0}", eventType.ToString());
+                            }
                         }, options);
                     }                    
                 }
@@ -344,14 +359,17 @@ namespace HighIronRanch.Azure.ServiceBus
                 {
                     _logger.Error(LoggerContext, ex, "Error starting event handler for type {0}", eventType.ToString());
                 }
-            });
         }
 
-        private void StartCommandHandlers()
+        private async Task StartCommandHandlers()
         {
-            Parallel.ForEach(_queueHandlers.Keys, async messageType =>
-            {
-                try
+            var tasks = _queueHandlers.Keys.Select(StartCommandHandler);
+            await Task.WhenAll(tasks);
+        }
+
+        private async Task StartCommandHandler(Type messageType)
+        {
+            try
                 {
                     var client = _queueClients[messageType];
                     client.PrefetchCount = MessagePrefetchSize;
@@ -370,8 +388,15 @@ namespace HighIronRanch.Azure.ServiceBus
 
                         client.RegisterSessionHandler(async (session, message, cancellationToken) =>
                         {
-                            var commandHandler = new BusCommandHandler(_handlerActivator, _queueHandlers, _logger, _scheduledMessageRepository, LoggerContext);
-                            await commandHandler.OnMessageAsync(client, message, async () => await session.RenewSessionLockAsync().ConfigureAwait(false));
+                            try
+                            {
+                                var commandHandler = new BusCommandHandler(_handlerActivator, _queueHandlers, _logger, _scheduledMessageRepository, LoggerContext);
+                                await commandHandler.OnMessageAsync(client, message, session);
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.Error(LoggerContext, ex, "Error processing command {0}", messageType.ToString());
+                            }
                         }, options);
                     }
                     else
@@ -384,12 +409,19 @@ namespace HighIronRanch.Azure.ServiceBus
                         options.MaxConcurrentCalls = 10;
                         options.MaxAutoRenewDuration = options.MaxAutoRenewDuration < waitTime
                             ? new TimeSpan(waitTime.Ticks * 5)
-                            : options.MaxAutoRenewDuration;
+                            : options.MaxAutoRenewDuration;                        
 
                         var commandHandler = new BusCommandHandler(_handlerActivator, _queueHandlers, _logger, _scheduledMessageRepository, LoggerContext);
                         client.RegisterMessageHandler(async (message, cancellationToken) =>
                         {
-                            await commandHandler.OnMessageAsync(client, message, async () => { });
+                            try
+                            {
+                                await commandHandler.OnMessageAsync(client, message, null);
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.Error(LoggerContext, ex, "Error processing command {0}", messageType.ToString());
+                            }
                         }, options);
                     }
                 }
@@ -397,11 +429,10 @@ namespace HighIronRanch.Azure.ServiceBus
                 {
                     _logger.Error(LoggerContext, ex, "Error starting command handler for type {0}", messageType.ToString());
                 }
-            });
         }
 
         private async Task ExceptionReceivedHandler(ExceptionReceivedEventArgs arg)
-        {
+        {            
             _logger.Error(LoggerContext, arg.Exception, $"Session error received {arg.ExceptionReceivedContext.Action} | { arg.ExceptionReceivedContext.Endpoint} | { arg.ExceptionReceivedContext.ClientId} | { arg.ExceptionReceivedContext.EntityPath}");
         }
     }

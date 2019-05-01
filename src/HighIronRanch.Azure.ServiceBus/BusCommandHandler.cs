@@ -34,14 +34,14 @@ namespace HighIronRanch.Azure.ServiceBus
             _loggerContext = loggerContext;
         }
 
-        public async Task OnMessageAsync(QueueClient queueClient, Message messageToHandle, Func<Task> renewLock)
+        public async Task OnMessageAsync(QueueClient queueClient, Message messageToHandle, IMessageSession session)
         {
             var messageType = Type.GetType(messageToHandle.ContentType);
             try
             {                
                 if (messageType == null) return;
 
-                var message = JsonConvert.DeserializeObject(messageToHandle.GetBody<string>(), messageType);
+                var message = JsonConvert.DeserializeObject(System.Text.Encoding.UTF8.GetString(messageToHandle.Body), messageType);
                 
                 var handlerType = _queueHandlers[messageType];
                 var handler = _handlerActivator.GetInstance(handlerType);
@@ -52,17 +52,25 @@ namespace HighIronRanch.Azure.ServiceBus
                     var stopwatch = new Stopwatch();					   
                     _logger.Information(_loggerContext, "Handling Command {0} {1}", messageType, handlerType);                      
                     stopwatch.Start();
-                    await ((Task) handleMethodInfo?.Invoke(handler, new[] {message, new CommandActions(renewLock)})).ConfigureAwait(false);
+                    await ((Task) handleMethodInfo?.Invoke(handler, new[] {message, new CommandActions(async () =>
+                    {
+                        if (session == null) return;
+                        await session.RenewSessionLockAsync().ConfigureAwait(false);
+                    })})).ConfigureAwait(false);
                     stopwatch.Stop();
                     _logger.Information(_loggerContext, "Handled Command {0} {1} in {2}s", messageType, handlerType, stopwatch.ElapsedMilliseconds/1000.0);
                 }
                 
                 await _scheduledMessageRepository.Delete(messageToHandle.SessionId, messageToHandle.MessageId);
-                await queueClient.CompleteAsync(messageToHandle.SystemProperties.LockToken).ConfigureAwait(false);
+
+                if(session != null)
+                    await session.CompleteAsync(messageToHandle.SystemProperties.LockToken).ConfigureAwait(false);
+                else
+                    await queueClient.CompleteAsync(messageToHandle.SystemProperties.LockToken).ConfigureAwait(false);
             } 
             catch (TimeoutException)
             {
-                await AbandonMessage(messageToHandle, queueClient).ConfigureAwait(false);
+                await AbandonMessage(messageToHandle, queueClient, session).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -70,13 +78,13 @@ namespace HighIronRanch.Azure.ServiceBus
                 {
                     // add in exponential spacing between retries
                     await Task.Delay(GetDelayFromDeliveryCount(messageToHandle.SystemProperties.DeliveryCount)).ConfigureAwait(false);
-                    await LogCommandError(AlertLevel.Warning, ex, messageToHandle, messageType, queueClient).ConfigureAwait(false);
-                    await AbandonMessage(messageToHandle, queueClient).ConfigureAwait(false);              
+                    await LogCommandError(AlertLevel.Warning, ex, messageToHandle, messageType, queueClient, session).ConfigureAwait(false);
+                    await AbandonMessage(messageToHandle, queueClient, session).ConfigureAwait(false);              
                 }
                 else
                 {
-                    await LogCommandError(AlertLevel.Error, ex, messageToHandle, messageType, queueClient).ConfigureAwait(false);
-                    await AbandonMessage(messageToHandle, queueClient).ConfigureAwait(false);
+                    await LogCommandError(AlertLevel.Error, ex, messageToHandle, messageType, queueClient, session).ConfigureAwait(false);
+                    await AbandonMessage(messageToHandle, queueClient, session).ConfigureAwait(false);
                 }
             }
         }
@@ -96,7 +104,8 @@ namespace HighIronRanch.Azure.ServiceBus
             }
         }
 
-        private async Task LogCommandError(AlertLevel alertLevel, Exception ex, Message messageToHandle, Type messageType, QueueClient session)
+        private async Task LogCommandError(AlertLevel alertLevel, Exception ex, Message messageToHandle,
+            Type messageType, QueueClient client, IMessageSession session)
         {
             try
             {
@@ -106,7 +115,7 @@ namespace HighIronRanch.Azure.ServiceBus
                     _logger.Warning(_loggerContext, ex, "Command Warning {0} retry {1}", messageType, messageToHandle.SystemProperties.DeliveryCount);
                 else if(alertLevel == AlertLevel.Info)
                     _logger.Information(_loggerContext, ex, "Command Info {0} retry {1}", messageType, messageToHandle.SystemProperties.DeliveryCount);
-                await AbandonMessage(messageToHandle, session).ConfigureAwait(false);
+                await AbandonMessage(messageToHandle, client, session).ConfigureAwait(false);
             }
             catch
             {
@@ -119,9 +128,12 @@ namespace HighIronRanch.Azure.ServiceBus
             }
         }
 
-        private static async Task AbandonMessage(Message messageToHandle, QueueClient client)
+        private static async Task AbandonMessage(Message messageToHandle, QueueClient client, IMessageSession session)
         {
-            await client.AbandonAsync(messageToHandle.SystemProperties.LockToken).ConfigureAwait(false);
+            if(session != null)
+                await session.AbandonAsync(messageToHandle.SystemProperties.LockToken).ConfigureAwait(false);
+            else
+                await client.AbandonAsync(messageToHandle.SystemProperties.LockToken).ConfigureAwait(false);
         }        
     }
 }

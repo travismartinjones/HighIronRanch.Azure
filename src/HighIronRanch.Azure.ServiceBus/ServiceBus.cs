@@ -55,26 +55,22 @@ namespace HighIronRanch.Azure.ServiceBus
 
         protected string CreateQueueName(string name)
         {
-            var queueName = string.Format("q.{0}{1}", CreatePrefix(), CleanseName(name));
+            var queueName = $"q.{CreatePrefix()}{CleanseName(name)}";
             return queueName;
         }
 
         protected string CreateTopicName(string name)
         {
-            var topicName = string.Format("t.{0}{1}", CreatePrefix(), CleanseName(name));
+            var topicName = $"t.{CreatePrefix()}{CleanseName(name)}";
             return topicName;
         }
 
         protected string CreateSubscriptionName(string name)
         {
-            // Use the hashcode to shorten the name and still have a good guarantee of uniqueness
-            var subname = string.Format("s.{0}{1}.{2}",
-                CreatePrefix(),
-                _settings.ServiceBusSubscriptionNamePrefix,
-                CleanseName(name).GetHashCode());
+            var subname = $"s.{CreatePrefix()}{CleanseName(_settings.ServiceBusSubscriptionNamePrefix)}";
 
             if (subname.Length > 50)
-                throw new ArgumentException("Resulting subscription name '" + subname + "' is longer than 50 character limit", "name");
+                throw new ArgumentException($"Resulting subscription {nameof(name)} '{subname}' is longer than 50 character limit", nameof(name));
 
             return subname;
         }
