@@ -63,8 +63,11 @@ namespace HighIronRanch.Azure.ServiceBus
                 
                 await _scheduledMessageRepository.Delete(messageToHandle.SessionId, messageToHandle.MessageId);
 
-                if(session != null)
+                if (session != null)
+                {
                     await session.CompleteAsync(messageToHandle.SystemProperties.LockToken).ConfigureAwait(false);
+                    await session.CloseAsync();
+                }
                 else
                     await queueClient.CompleteAsync(messageToHandle.SystemProperties.LockToken).ConfigureAwait(false);
             } 

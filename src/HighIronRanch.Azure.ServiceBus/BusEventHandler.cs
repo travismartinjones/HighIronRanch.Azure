@@ -56,8 +56,11 @@ namespace HighIronRanch.Azure.ServiceBus
                         stopwatch.ElapsedMilliseconds / 1000.0);
                 }
 
-                if(session != null)
+                if (session != null)
+                {
                     await session.CompleteAsync(eventToHandle.SystemProperties.LockToken).ConfigureAwait(false);
+                    await session.CloseAsync();
+                }
                 else
                     await client.CompleteAsync(eventToHandle.SystemProperties.LockToken).ConfigureAwait(false);
             }
