@@ -178,7 +178,8 @@ namespace HighIronRanch.Azure.ServiceBus
                     else if (options.RemoveAllButLastInWindowSeconds.HasValue)
                     {
                         var preExistingMessages = (await _scheduledMessageRepository.GetBySessionIdType(brokeredMessage.SessionId, type))
-                            .Where(x => x.ScheduleEnqueueDate > DateTime.UtcNow && x.ScheduleEnqueueDate < DateTime.UtcNow.AddSeconds(options.RemoveAllButLastInWindowSeconds.Value))
+                            .Where(x => x.ScheduleEnqueueDate > DateTime.UtcNow.AddSeconds(-options.RemoveAllButLastInWindowSeconds.Value) && x.ScheduleEnqueueDate < DateTime.UtcNow.AddSeconds(options.RemoveAllButLastInWindowSeconds.Value))
+                            .OrderBy(x => x.ScheduleEnqueueDate)
                             .ToList();
                         
                         // remove all but the last message
@@ -186,8 +187,23 @@ namespace HighIronRanch.Azure.ServiceBus
                         {
                             foreach (var messageToDelete in preExistingMessages.Take(preExistingMessages.Count - 1))
                             {
-                                await client.CancelScheduledMessageAsync(messageToDelete.SequenceId);
-                                await _scheduledMessageRepository.Delete(messageToDelete.SessionId, messageToDelete.CorrelationId);
+                                try
+                                {
+                                    await client.CancelScheduledMessageAsync(messageToDelete.SequenceId).ConfigureAwait(false);
+                                }
+                                catch (Exception ex)
+                                {
+                                    _logger.Error(LoggerContext, ex, "Error cancelling message {0}", messageToDelete.SequenceId);
+                                }
+                         
+                                try
+                                {
+                                    await _scheduledMessageRepository.Delete(messageToDelete.SessionId, messageToDelete.CorrelationId);
+                                }
+                                catch (Exception ex)
+                                {
+                                    _logger.Error(LoggerContext, ex, "Error deleting message {0}", messageToDelete.SequenceId);
+                                }                                
                             }
                         }
                     }
