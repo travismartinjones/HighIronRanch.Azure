@@ -10,5 +10,6 @@ namespace HighIronRanch.Azure.ServiceBus.Contracts
         public string Type { get; set; }
         public DateTime SubmitDate { get; set; }
         public DateTime ScheduleEnqueueDate { get; set; }
+        public bool IsCancelled { get; set; }
     }
 }
