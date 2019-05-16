@@ -145,7 +145,11 @@ namespace HighIronRanch.Azure.ServiceBus
                     else if (options.RemoveAllButLastInWindowSeconds.HasValue)
                     {
                         var preExistingMessages = (await _scheduledMessageRepository.GetBySessionIdType(brokeredMessage.SessionId, type))
-                            .Where(x => x.ScheduleEnqueueDate > DateTime.UtcNow.AddSeconds(-options.RemoveAllButLastInWindowSeconds.Value) && x.ScheduleEnqueueDate < DateTime.UtcNow.AddSeconds(options.RemoveAllButLastInWindowSeconds.Value))
+                            .Where(x => 
+                                x.ScheduleEnqueueDate > DateTime.UtcNow.AddSeconds(-options.RemoveAllButLastInWindowSeconds.Value) && 
+                                x.ScheduleEnqueueDate < DateTime.UtcNow.AddSeconds(options.RemoveAllButLastInWindowSeconds.Value) && 
+                                !x.IsCancelled
+                            )
                             .OrderBy(x => x.ScheduleEnqueueDate)
                             .ToList();
                         
@@ -157,20 +161,20 @@ namespace HighIronRanch.Azure.ServiceBus
                                 try
                                 {
                                     await client.CancelScheduledMessageAsync(messageToDelete.SequenceId).ConfigureAwait(false);
-                                }
-                                catch (Exception ex)
-                                {
-                                    _logger.Error(LoggerContext, ex, "Error cancelling message {0}", messageToDelete.SequenceId);
-                                }
-                         
-                                try
-                                {
                                     await _scheduledMessageRepository.Delete(messageToDelete.SessionId, messageToDelete.CorrelationId);
                                 }
                                 catch (Exception ex)
                                 {
-                                    _logger.Error(LoggerContext, ex, "Error deleting message {0}", messageToDelete.SequenceId);
-                                }                                
+                                    try
+                                    {
+                                        await _scheduledMessageRepository.Cancel(messageToDelete.SessionId, messageToDelete.CorrelationId);
+                                        _logger.Error(LoggerContext, ex, "Error cancelling message {0}", messageToDelete.SequenceId);
+                                    }
+                                    catch (Exception ex2)
+                                    {
+                                        _logger.Error(LoggerContext, ex2, "Error marking message {0} as cancelled", messageToDelete.SequenceId);
+                                    }                                    
+                                }                      
                             }
                         }
                     }
