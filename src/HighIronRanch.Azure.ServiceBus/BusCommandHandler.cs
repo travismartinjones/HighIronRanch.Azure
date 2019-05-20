@@ -43,7 +43,10 @@ namespace HighIronRanch.Azure.ServiceBus
 
                 // don't process a message if it has been cancelled
                 if ((await _scheduledMessageRepository.GetBySessionIdMessageId(messageToHandle.SessionId, messageToHandle.MessageId))?.IsCancelled ?? false)
+                {
+                    await _scheduledMessageRepository.Delete(messageToHandle.SessionId, messageToHandle.MessageId);
                     return;
+                }
 
                 var message = JsonConvert.DeserializeObject(System.Text.Encoding.UTF8.GetString(messageToHandle.Body), messageType);
                 

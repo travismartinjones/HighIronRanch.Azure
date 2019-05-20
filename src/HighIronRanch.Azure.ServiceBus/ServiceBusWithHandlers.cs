@@ -138,13 +138,22 @@ namespace HighIronRanch.Azure.ServiceBus
                         // any previously queued message of the same type should be cancelled and removed
                         foreach (var preExistingMessage in preExistingMessages)
                         {
-                            await client.CancelScheduledMessageAsync(preExistingMessage.SequenceId);
-                            await _scheduledMessageRepository.Delete(preExistingMessage.SessionId, preExistingMessage.CorrelationId);
+                            try
+                            {
+                                await client.CancelScheduledMessageAsync(preExistingMessage.SequenceId);                            
+                                await _scheduledMessageRepository.Delete(preExistingMessage.SessionId, preExistingMessage.CorrelationId);
+                            }
+                            catch(Exception ex)
+                            {
+                                _logger.Error(LoggerContext, ex, "Error cancelling message {0} {1}", command.GetType().ToString(), preExistingMessage.CorrelationId);
+                            }
                         }
                     }
                     else if (options.RemoveAllButLastInWindowSeconds.HasValue)
                     {
-                        var preExistingMessages = (await _scheduledMessageRepository.GetBySessionIdType(brokeredMessage.SessionId, type))
+                        var previousMessages = (await _scheduledMessageRepository.GetBySessionIdType(brokeredMessage.SessionId, type));
+
+                        var messagesInRange = previousMessages
                             .Where(x => 
                                 x.ScheduleEnqueueDate > DateTime.UtcNow.AddSeconds(-options.RemoveAllButLastInWindowSeconds.Value) && 
                                 x.ScheduleEnqueueDate < DateTime.UtcNow.AddSeconds(options.RemoveAllButLastInWindowSeconds.Value) && 
@@ -154,9 +163,9 @@ namespace HighIronRanch.Azure.ServiceBus
                             .ToList();
                         
                         // remove all but the last message
-                        if (preExistingMessages.Count > 0)
+                        if (messagesInRange.Count > 0)
                         {
-                            foreach (var messageToDelete in preExistingMessages.Take(preExistingMessages.Count - 1))
+                            foreach (var messageToDelete in messagesInRange.Take(messagesInRange.Count - 1))
                             {
                                 try
                                 {
@@ -173,8 +182,24 @@ namespace HighIronRanch.Azure.ServiceBus
                                     catch (Exception ex2)
                                     {
                                         _logger.Error(LoggerContext, ex2, "Error marking message {0} as cancelled", messageToDelete.SequenceId);
-                                    }                                    
-                                }                      
+                                    }
+                                }
+                            }
+                        }
+
+                        var messagesToCleanup = previousMessages.Where(x => x.IsCancelled ||
+                                                                            x.ScheduleEnqueueDate <
+                                                                            DateTime.UtcNow.AddMinutes(-5)).ToList();
+
+                        foreach (var messageToCleanup in messagesToCleanup)
+                        {
+                            try
+                            {
+                                await _scheduledMessageRepository.Delete(messageToCleanup.SessionId, messageToCleanup.CorrelationId);
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.Error(LoggerContext, ex, "Error removing historic message {0}", messageToCleanup.CorrelationId);
                             }
                         }
                     }
