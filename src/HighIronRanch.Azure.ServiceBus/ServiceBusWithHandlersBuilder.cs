@@ -15,6 +15,7 @@ namespace HighIronRanch.Azure.ServiceBus
 		private readonly IHandlerActivator _handlerActivator;
 		private readonly ILogger _logger;
         private readonly IScheduledMessageRepository _scheduledMessageRepository;
+        private readonly IHandlerStatusProcessor _handlerStatusProcessor;
 
         private IEnumerable<string> _messageAssembliesToScan;
 		private IEnumerable<Type> _messageTypes; 
@@ -35,12 +36,14 @@ namespace HighIronRanch.Azure.ServiceBus
             IServiceBus serviceBus, 
             IHandlerActivator handlerActivator, 
             ILogger logger, 
-            IScheduledMessageRepository scheduledMessageRepository)
+            IScheduledMessageRepository scheduledMessageRepository, 
+            IHandlerStatusProcessor handlerStatusProcessor)
 		{
 			_serviceBus = serviceBus;
 			_handlerActivator = handlerActivator;
 			_logger = logger;
             _scheduledMessageRepository = scheduledMessageRepository;
+            _handlerStatusProcessor = handlerStatusProcessor;
         }
 
 		public ServiceBusWithHandlersBuilder CreateServiceBus()
@@ -149,7 +152,7 @@ namespace HighIronRanch.Azure.ServiceBus
 
 		public async Task<ServiceBusWithHandlers> BuildAsync()
 		{
-			var bus = new ServiceBusWithHandlers(_serviceBus, _handlerActivator, _logger, _scheduledMessageRepository);
+			var bus = new ServiceBusWithHandlers(_serviceBus, _handlerActivator, _logger, _handlerStatusProcessor, _scheduledMessageRepository);
 
 		    ServiceBusEnvironment.SystemConnectivity.Mode = ConnectivityMode.Https;
 

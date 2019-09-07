@@ -25,6 +25,7 @@ namespace HighIronRanch.Azure.ServiceBus
 		private bool _useJsonSerialization = true;
 		private readonly IHandlerActivator _handlerActivator;
 		private readonly ILogger _logger;
+        private readonly IHandlerStatusProcessor _handlerStatusProcessor;
         private readonly IScheduledMessageRepository _scheduledMessageRepository;
         protected CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
         
@@ -38,18 +39,19 @@ namespace HighIronRanch.Azure.ServiceBus
 		protected readonly IDictionary<Type, TopicClient> _topicClients = new ConcurrentDictionary<Type, TopicClient>();
  
 		// IEvent, ISet<IEventHandler>
-		protected readonly IDictionary<Type, ISet<Type>> _eventHandlers = new ConcurrentDictionary<Type, ISet<Type>>();
-	    private readonly TimeSpan _defaultSessionWaitTime = new TimeSpan(0, 0, 60);
+		protected readonly IDictionary<Type, ISet<Type>> _eventHandlers = new ConcurrentDictionary<Type, ISet<Type>>();	    
 
 	    public ServiceBusWithHandlers(
             IServiceBus serviceBus, 
             IHandlerActivator handlerActivator, 
             ILogger logger,
+            IHandlerStatusProcessor handlerStatusProcessor,
             IScheduledMessageRepository scheduledMessageRepository)
 		{
 			_serviceBus = serviceBus;
 			_handlerActivator = handlerActivator;
 			_logger = logger;
+            _handlerStatusProcessor = handlerStatusProcessor;
             _scheduledMessageRepository = scheduledMessageRepository;
         }
         
@@ -177,19 +179,40 @@ namespace HighIronRanch.Azure.ServiceBus
                     }
                     else if (options.RemoveAllButLastInWindowSeconds.HasValue)
                     {
-                        var preExistingMessages = (await _scheduledMessageRepository.GetBySessionIdType(brokeredMessage.SessionId, type))
-                            .Where(x => 
-                                x.ScheduleEnqueueDate > DateTime.UtcNow.AddSeconds(-options.RemoveAllButLastInWindowSeconds.Value) && 
-                                x.ScheduleEnqueueDate < DateTime.UtcNow.AddSeconds(options.RemoveAllButLastInWindowSeconds.Value) && 
+                        var allMessages = (await _scheduledMessageRepository.GetBySessionIdType(brokeredMessage.SessionId, type));
+
+                        var messagesInRange = allMessages
+                        .Where(x => 
+                            x.ScheduleEnqueueDate > DateTime.UtcNow.AddSeconds(-options.RemoveAllButLastInWindowSeconds.Value) && 
+                            x.ScheduleEnqueueDate < DateTime.UtcNow.AddSeconds(options.RemoveAllButLastInWindowSeconds.Value) && 
+                            !x.IsCancelled
+                        )
+                        .OrderBy(x => x.ScheduleEnqueueDate)
+                        .ToList();
+                        
+                        var oldMessages = allMessages.Where(x => 
+                                x.ScheduleEnqueueDate < DateTime.UtcNow.AddSeconds(-options.RemoveAllButLastInWindowSeconds.Value) && 
                                 !x.IsCancelled
                             )
                             .OrderBy(x => x.ScheduleEnqueueDate)
                             .ToList();
-                        
-                        // remove all but the last message
-                        if (preExistingMessages.Count > 0)
+
+                        foreach (var oldMessage in oldMessages)
                         {
-                            foreach (var messageToDelete in preExistingMessages.Take(preExistingMessages.Count - 1))
+                            try
+                            {
+                                await _scheduledMessageRepository.Delete(oldMessage.SessionId, oldMessage.CorrelationId);
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.Error(LoggerContext, ex, "Error cleaning up old message {0}", oldMessage.SequenceId);
+                            }
+                        }
+
+                        // remove all but the last message
+                        if (messagesInRange.Count > 0)
+                        {
+                            foreach (var messageToDelete in messagesInRange.Take(messagesInRange.Count - 1))
                             {
                                 try
                                 {
@@ -206,13 +229,13 @@ namespace HighIronRanch.Azure.ServiceBus
                                     catch (Exception ex2)
                                     {
                                         _logger.Error(LoggerContext, ex2, "Error marking message {0} as cancelled", messageToDelete.SequenceId);
-                                    }                                    
+                                    }
                                 }
                             }
 
-                            // there is already a message queued for an earlier time, so no need to enqueue the current message
+                            // no need to schedule a message, since there is already one queued up for processing in the same timeframe
                             return;
-                        }
+                        }                        
                     }
                     else if (options.DuplicatePreventionSeconds.HasValue)
                     {                        
@@ -343,14 +366,6 @@ namespace HighIronRanch.Azure.ServiceBus
             
 	        return 0;
 	    }
-
-        private TimeSpan GetWaitTimeForType(Type messageType)
-        {
-            var sessionAttribute = (SessionAttribute)Attribute.GetCustomAttribute(messageType, typeof(SessionAttribute));
-            if (sessionAttribute == null)
-                return _defaultSessionWaitTime;
-            return new TimeSpan(0, 0, sessionAttribute.TimeoutSeconds);
-        }
         
 	    private async Task HandleEventForMultipleDeployments(BrokeredMessage eventToHandle)
 	    {
@@ -389,8 +404,8 @@ namespace HighIronRanch.Azure.ServiceBus
 
 	    public async Task StartHandlers()
 		{
-		    var commandSessionHandlerFactory = new CommandSessionHandlerFactory(_handlerActivator, _queueHandlers, _logger, _scheduledMessageRepository, LoggerContext, _useJsonSerialization);
-            var eventSessionHandlerFactory = new EventSessionHandlerFactory(_handlerActivator, _eventHandlers, _queueHandlers, _logger, LoggerContext, _useJsonSerialization);
+		    var commandSessionHandlerFactory = new CommandSessionHandlerFactory(_handlerActivator, _queueHandlers, _logger, _handlerStatusProcessor, _scheduledMessageRepository, LoggerContext, _useJsonSerialization);
+            var eventSessionHandlerFactory = new EventSessionHandlerFactory(_handlerActivator, _eventHandlers, _queueHandlers, _logger, _handlerStatusProcessor, LoggerContext, _useJsonSerialization);
 
 #pragma warning disable 4014
 		    Task.Run(() =>
@@ -407,15 +422,15 @@ namespace HighIronRanch.Azure.ServiceBus
 		                    {
 		                        AutoComplete = false,
 		                    };
-                            var waitTime = GetWaitTimeForType(messageType);
+                            var waitTime = SessionAttribute.GetWaitTimeForType(messageType);
                             options.MessageWaitTimeout = options.MessageWaitTimeout < waitTime ? waitTime : options.MessageWaitTimeout;
                             options.AutoRenewTimeout = options.AutoRenewTimeout < waitTime ? new TimeSpan(waitTime.Ticks * 5) : options.AutoRenewTimeout;
-
+                            
                             await client.RegisterSessionHandlerFactoryAsync(commandSessionHandlerFactory,options);
 		                }
 		                else
 		                {
-		                    var commandHandler = new BusCommandHandler(_handlerActivator, _queueHandlers, _logger, _scheduledMessageRepository,
+		                    var commandHandler = new BusCommandHandler(_handlerActivator, _queueHandlers, _logger, _handlerStatusProcessor, _scheduledMessageRepository,
 		                        LoggerContext, _useJsonSerialization);
 		                    client.OnMessageAsync(async c => await commandHandler.OnMessageAsync(null, c), new OnMessageOptions
 		                    {
@@ -446,7 +461,7 @@ namespace HighIronRanch.Azure.ServiceBus
 		                        {
 		                            AutoComplete = false,
 		                        };
-                                var waitTime = GetWaitTimeForType(eventType);
+                                var waitTime = SessionAttribute.GetWaitTimeForType(eventType);
                                 options.MessageWaitTimeout = options.MessageWaitTimeout < waitTime ? waitTime : options.MessageWaitTimeout;
                                 options.AutoRenewTimeout = options.AutoRenewTimeout < waitTime ? new TimeSpan(waitTime.Ticks * 5) : options.AutoRenewTimeout;
                                 await client.RegisterSessionHandlerFactoryAsync(eventSessionHandlerFactory, options);
@@ -459,7 +474,7 @@ namespace HighIronRanch.Azure.ServiceBus
 		                        });
                             
 		                    var qclient = _queueClients[eventType];
-		                    var eventHandler = new BusEventHandler(_handlerActivator, _eventHandlers, _logger, LoggerContext, _useJsonSerialization);
+		                    var eventHandler = new BusEventHandler(_handlerActivator, _eventHandlers, _logger, _handlerStatusProcessor, LoggerContext, _useJsonSerialization);
 		                    qclient.OnMessageAsync(async e => await eventHandler.OnMessageAsync(null, e), new OnMessageOptions
 		                    {
 		                        AutoComplete = false,
@@ -474,14 +489,14 @@ namespace HighIronRanch.Azure.ServiceBus
 		                        {
 		                            AutoComplete = false,
 		                        };
-                                var waitTime = GetWaitTimeForType(eventType);
+                                var waitTime = SessionAttribute.GetWaitTimeForType(eventType);
                                 options.MessageWaitTimeout = options.MessageWaitTimeout < waitTime ? waitTime : options.MessageWaitTimeout;
                                 options.AutoRenewTimeout = options.AutoRenewTimeout < waitTime ? new TimeSpan(waitTime.Ticks * 5) : options.AutoRenewTimeout;
                                 await client.RegisterSessionHandlerFactoryAsync(eventSessionHandlerFactory,options);
 		                    }
 		                    else
 		                    {
-		                        var eventHandler = new BusEventHandler(_handlerActivator, _eventHandlers, _logger, LoggerContext, _useJsonSerialization);		                        
+		                        var eventHandler = new BusEventHandler(_handlerActivator, _eventHandlers, _logger, _handlerStatusProcessor, LoggerContext, _useJsonSerialization);		                        
 		                        client.OnMessageAsync(async e => await eventHandler.OnMessageAsync(null, e), new OnMessageOptions
 		                        {
 		                            AutoComplete = false,

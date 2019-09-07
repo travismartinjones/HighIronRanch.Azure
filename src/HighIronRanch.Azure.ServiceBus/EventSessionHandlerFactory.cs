@@ -11,21 +11,22 @@ namespace HighIronRanch.Azure.ServiceBus
         private readonly IHandlerActivator _handlerActivator;
         private readonly IDictionary<Type, ISet<Type>> _eventHandlers;
         private readonly ILogger _logger;
+        private readonly IHandlerStatusProcessor _handlerStatusProcessor;
         private readonly string _loggerContext;
         private readonly bool _useJsonSerialization;
 
-        public EventSessionHandlerFactory(
-            IHandlerActivator handlerActivator,
+        public EventSessionHandlerFactory(IHandlerActivator handlerActivator,
             IDictionary<Type, ISet<Type>> eventHandlers,
             IDictionary<Type, Type> queueHandlers,
             ILogger logger,
+            IHandlerStatusProcessor handlerStatusProcessor,
             string loggerContext,
-            bool useJsonSerialization
-        )
+            bool useJsonSerialization)
         {
             _handlerActivator = handlerActivator;
             _eventHandlers = eventHandlers;
             _logger = logger;
+            _handlerStatusProcessor = handlerStatusProcessor;
             _loggerContext = loggerContext;
             _useJsonSerialization = useJsonSerialization;
         }
@@ -36,6 +37,7 @@ namespace HighIronRanch.Azure.ServiceBus
                 _handlerActivator,
                 _eventHandlers,
                 _logger,
+                _handlerStatusProcessor,
                 _loggerContext,
                 _useJsonSerialization);
         }

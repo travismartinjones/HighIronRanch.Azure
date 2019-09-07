@@ -14,6 +14,7 @@ namespace HighIronRanch.Azure.ServiceBus
         private readonly IHandlerActivator _handlerActivator;
         private readonly IDictionary<Type, ISet<Type>> _eventHandlers;
         private readonly ILogger _logger;
+        private readonly IHandlerStatusProcessor _handlerStatusProcessor;
         private readonly string _loggerContext;
         private readonly bool _useJsonSerialization;
         private const int MaximumEventDeliveryCount = 10;
@@ -22,12 +23,14 @@ namespace HighIronRanch.Azure.ServiceBus
             IHandlerActivator handlerActivator,
             IDictionary<Type, ISet<Type>> eventHandlers,
             ILogger logger,
+            IHandlerStatusProcessor handlerStatusProcessor,
             string loggerContext,
             bool useJsonSerialization)
         {
             _handlerActivator = handlerActivator;
             _eventHandlers = eventHandlers;
             _logger = logger;
+            _handlerStatusProcessor = handlerStatusProcessor;
             _loggerContext = loggerContext;
             _useJsonSerialization = useJsonSerialization;
         }
@@ -35,7 +38,8 @@ namespace HighIronRanch.Azure.ServiceBus
         public async Task OnMessageAsync(MessageSession session, BrokeredMessage eventToHandle)
         {            
             var eventType = Type.GetType(eventToHandle.ContentType);
-
+            var stopwatch = new Stopwatch();
+            Type lasthandlerType = null;
             try
             {
                 if (eventType == null) return;
@@ -58,39 +62,52 @@ namespace HighIronRanch.Azure.ServiceBus
 
                 foreach (var handlerType in handlerTypes)
                 {
+                    lasthandlerType = handlerType;
                     var handler = _handlerActivator.GetInstance(handlerType);
                     var handleMethodInfo = handlerType.GetMethod("HandleAsync", new[] {eventType});
                     if (handleMethodInfo == null) continue;
-                    var stopwatch = new Stopwatch();
+                    
                     _logger.Information(_loggerContext, "Handling Event {0} {1}", eventType, handlerType);
-                    stopwatch.Start();
+                    _handlerStatusProcessor.Begin(handlerType.FullName, eventToHandle.SessionId, eventToHandle.EnqueuedTimeUtc);
+
+                    stopwatch.Restart();             
                     await ((Task) handleMethodInfo.Invoke(handler, new[] {message})).ConfigureAwait(false);
                     stopwatch.Stop();
-                    _logger.Information(_loggerContext, "Handled Event {0} {1} in {2}s", eventType, handlerType,
-                        stopwatch.ElapsedMilliseconds / 1000.0);
-                }
 
-                await eventToHandle.CompleteAsync().ConfigureAwait(false);
-                if (session != null)
-                    await session.CloseAsync().ConfigureAwait(false);
+                    var elapsedSeconds = stopwatch.ElapsedMilliseconds / 1000.0;
+                    _logger.Information(_loggerContext, "Handled Event {0} {1} in {2}s", eventType, handlerType, elapsedSeconds);                    
+                    _handlerStatusProcessor.Complete(handlerType.FullName, eventToHandle.SessionId, elapsedSeconds);
+                }
+                
+                stopwatch.Restart();
+                await eventToHandle.CompleteAsync();                
+                stopwatch.Stop();
+                _handlerStatusProcessor.BusComplete(lasthandlerType?.FullName, eventToHandle.SessionId, stopwatch.ElapsedMilliseconds / 1000.0);
             }
-            catch (TimeoutException)
+            catch (TimeoutException ex)
             {
-                await AbandonMessage(eventToHandle, session).ConfigureAwait(false);
+                _handlerStatusProcessor.Abandon(lasthandlerType?.FullName, eventToHandle.SessionId, ex);
+                if (eventToHandle.DeliveryCount < MaximumEventDeliveryCount)
+                {
+                    await LogAndAbandonEventError(AlertLevel.Warning, ex, eventToHandle, eventType, session).ConfigureAwait(false);
+                }
+                else
+                {
+                    await LogAndAbandonEventError(AlertLevel.Error, ex, eventToHandle, eventType, session).ConfigureAwait(false);
+                }
             }
             catch (Exception ex)
-            {		        	        
+            {	
+                _handlerStatusProcessor.Error(lasthandlerType?.FullName, eventToHandle.SessionId, ex);
                 if (eventToHandle.DeliveryCount < MaximumEventDeliveryCount)
                 {
                     // add in exponential spacing between retries
                     await Task.Delay(GetDelayFromDeliveryCount(eventToHandle.DeliveryCount)).ConfigureAwait(false);
-                    await LogEventError(AlertLevel.Warning, ex, eventToHandle, eventType, session).ConfigureAwait(false);
-                    await AbandonMessage(eventToHandle, session).ConfigureAwait(false);
+                    await LogAndAbandonEventError(AlertLevel.Warning, ex, eventToHandle, eventType, session).ConfigureAwait(false);
                 }
                 else
                 {
-                    await LogEventError(AlertLevel.Error, ex, eventToHandle, eventType, session).ConfigureAwait(false);
-                    await AbandonMessage(eventToHandle, session).ConfigureAwait(false);
+                    await LogAndAbandonEventError(AlertLevel.Error, ex, eventToHandle, eventType, session).ConfigureAwait(false);
                 }
             }
         }
@@ -100,17 +117,17 @@ namespace HighIronRanch.Azure.ServiceBus
             switch (deliveryCount)
             {
                 case 9:
-                    return 5000;
-                case 8:
                     return 1000;
-                case 7:
+                case 8:
                     return 500;
-                default:
+                case 7:
                     return 100;
+                default:
+                    return 50;
             }
         }
 
-        private async Task LogEventError(AlertLevel alertLevel, Exception ex, BrokeredMessage messageToHandle, Type messageType, MessageSession session)
+        private async Task LogAndAbandonEventError(AlertLevel alertLevel, Exception ex, BrokeredMessage messageToHandle, Type messageType, MessageSession session)
         {
             try
             {
@@ -120,7 +137,7 @@ namespace HighIronRanch.Azure.ServiceBus
                     _logger.Warning(_loggerContext, ex, "Event Warning {0} retry {1}", messageType, messageToHandle.DeliveryCount);
                 else if(alertLevel == AlertLevel.Info)
                     _logger.Information(_loggerContext, ex, "Event Info {0} retry {1}", messageType, messageToHandle.DeliveryCount);
-                await AbandonMessage(messageToHandle, session);
+                await AbandonMessage(messageToHandle, session).ConfigureAwait(false);
             }
             catch (Exception ex2)
             {
@@ -133,11 +150,14 @@ namespace HighIronRanch.Azure.ServiceBus
             }
         }
 
-        private static async Task AbandonMessage(BrokeredMessage messageToHandle, MessageSession session)
-        {
+        private async Task AbandonMessage(BrokeredMessage messageToHandle, MessageSession session)
+        {            
+            var handlerType = Type.GetType(messageToHandle.ContentType);
+            var stopwatch = new Stopwatch();
+            stopwatch.Start();
             await messageToHandle.AbandonAsync().ConfigureAwait(false);
-            if (session != null)
-                await session.CloseAsync().ConfigureAwait(false);
+            stopwatch.Stop();
+            _handlerStatusProcessor.BusAbandon(handlerType?.FullName, messageToHandle.SessionId, stopwatch.ElapsedMilliseconds / 1000.0);
         }
 
         public async Task OnCloseSessionAsync(MessageSession session)
