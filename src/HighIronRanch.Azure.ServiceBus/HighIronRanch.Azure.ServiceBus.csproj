@@ -74,6 +74,7 @@
     <Compile Include="BusCommandHandlerFactory.cs" />
     <Compile Include="BusEventHandler.cs" />
     <Compile Include="EnqueueOptions.cs" />
+    <Compile Include="EventActions.cs" />
     <Compile Include="EventSessionHandlerFactory.cs" />
     <Compile Include="IServiceBusTypeStateService.cs" />
     <Compile Include="IServiceBusWithHandlers.cs" />
@@ -83,6 +84,7 @@
     <Compile Include="ServiceBusWithHandlers.cs" />
     <Compile Include="ServiceBusWithHandlersBuilder.cs" />
     <Compile Include="SessionAttribute.cs" />
+    <Compile Include="SessionService.cs" />
     <Compile Include="TypeExtensions.cs" />
   </ItemGroup>
   <ItemGroup>

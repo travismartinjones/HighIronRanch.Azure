@@ -1,6 +1,6 @@
 namespace HighIronRanch.Azure.ServiceBus.Contracts
 {
-    public interface IAggregateEventHandler<T> : IEventHandler<T> where T : IAggregateEvent
+    public interface IAggregateEventHandler<in T> : IEventHandler<T> where T : IAggregateEvent
     {		
     }
 }

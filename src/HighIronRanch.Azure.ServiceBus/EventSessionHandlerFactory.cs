@@ -12,23 +12,29 @@ namespace HighIronRanch.Azure.ServiceBus
         private readonly IDictionary<Type, ISet<Type>> _eventHandlers;
         private readonly ILogger _logger;
         private readonly IHandlerStatusProcessor _handlerStatusProcessor;
+        private readonly ISessionService _sessionService;
         private readonly string _loggerContext;
         private readonly bool _useJsonSerialization;
+        private readonly int _defaultWaitSeconds;
 
         public EventSessionHandlerFactory(IHandlerActivator handlerActivator,
             IDictionary<Type, ISet<Type>> eventHandlers,
             IDictionary<Type, Type> queueHandlers,
             ILogger logger,
             IHandlerStatusProcessor handlerStatusProcessor,
+            ISessionService sessionService,
             string loggerContext,
-            bool useJsonSerialization)
+            bool useJsonSerialization,
+            int defaultWaitSeconds)
         {
             _handlerActivator = handlerActivator;
             _eventHandlers = eventHandlers;
             _logger = logger;
             _handlerStatusProcessor = handlerStatusProcessor;
+            _sessionService = sessionService;
             _loggerContext = loggerContext;
             _useJsonSerialization = useJsonSerialization;
+            _defaultWaitSeconds = defaultWaitSeconds;
         }
 
         public IMessageSessionAsyncHandler CreateInstance(MessageSession session, BrokeredMessage message)
@@ -38,8 +44,10 @@ namespace HighIronRanch.Azure.ServiceBus
                 _eventHandlers,
                 _logger,
                 _handlerStatusProcessor,
+                _sessionService,
                 _loggerContext,
-                _useJsonSerialization);
+                _useJsonSerialization,
+                _defaultWaitSeconds);
         }
 
         public void DisposeInstance(IMessageSessionAsyncHandler handler)

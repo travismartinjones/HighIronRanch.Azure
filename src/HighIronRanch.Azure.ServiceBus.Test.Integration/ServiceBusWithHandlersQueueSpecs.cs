@@ -57,7 +57,7 @@ namespace HighIronRanch.Azure.ServiceBus.Test.Integration
 			public async Task HandleAsync(TestCommand command, ICommandActions actions)
 			{
 				Thread.Sleep(55000);
-				await actions.RenewLockAsync();
+				await actions.RenewLockAsync().ConfigureAwait(false);
 				Thread.Sleep(10000);
 				LastHandledContent = command.Content;
 			}
@@ -127,7 +127,7 @@ namespace HighIronRanch.Azure.ServiceBus.Test.Integration
 
 		public class When_sending_a_command : CleaningConcern
 		{
-			private static string _testContent = Guid.NewGuid().ToString();
+			private static readonly string _testContent = Guid.NewGuid().ToString();
 
 			private Establish context = () =>
 			{
@@ -163,7 +163,7 @@ namespace HighIronRanch.Azure.ServiceBus.Test.Integration
 
         public class When_sending_an_aggregate_command : CleaningConcern
         {
-            private static string _testContent = Guid.NewGuid().ToString();
+            private static readonly string _testContent = Guid.NewGuid().ToString();
 
             private Establish context = () =>
             {
@@ -201,7 +201,7 @@ namespace HighIronRanch.Azure.ServiceBus.Test.Integration
         public class When_sending_a_long_running_command : CleaningConcern
 		{
 			private static string _context = "Long running test";
-			private static string _testContent = Guid.NewGuid().ToString();
+			private static readonly string _testContent = Guid.NewGuid().ToString();
 
 			private Establish context = () =>
 			{

@@ -18,7 +18,7 @@ namespace HighIronRanch.Azure.DocumentDb
     {
         private readonly ILogger _logger;
 
-        private IDictionary<string, DocumentClient> _clients = new ConcurrentDictionary<string, DocumentClient>();
+        private readonly IDictionary<string, DocumentClient> _clients = new ConcurrentDictionary<string, DocumentClient>();
 
         public DocumentDbClientFactory(ILogger logger)
         {
@@ -33,9 +33,9 @@ namespace HighIronRanch.Azure.DocumentDb
                 _logger.Debug(Common.LoggerContext, "Creating DocumentDb Client for {0}", settings.DocumentDbRepositoryEndpointUrl);
 
                 var client = new DocumentClient(new Uri(settings.DocumentDbRepositoryEndpointUrl), settings.DocumentDbRepositoryAuthKey);
-                await client.OpenAsync();
+                await client.OpenAsync().ConfigureAwait(false);
 
-                await SpinUpDatabaseAsync(client, settings.DocumentDbRepositoryDatabaseId);
+                await SpinUpDatabaseAsync(client, settings.DocumentDbRepositoryDatabaseId).ConfigureAwait(false);
 
                 _clients[key] = client;
                 return client;
@@ -53,7 +53,7 @@ namespace HighIronRanch.Azure.DocumentDb
             {
                 _logger.Debug(Common.LoggerContext, "Create DocumentDb database for {0}", databaseId);
 
-                await client.CreateDatabaseAsync(new Database { Id = databaseId });
+                await client.CreateDatabaseAsync(new Database { Id = databaseId }).ConfigureAwait(false);
             }
 
 /*

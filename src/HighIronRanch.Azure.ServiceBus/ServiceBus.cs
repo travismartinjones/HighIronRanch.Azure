@@ -88,18 +88,18 @@ namespace HighIronRanch.Azure.ServiceBus
         public async Task CreateQueueAsync(string name, bool isSessionRequired)
         {
             var queueName = CreateQueueName(name);
-            await CreateCleansedNameQueueAsync(queueName, isSessionRequired);
+            await CreateCleansedNameQueueAsync(queueName, isSessionRequired).ConfigureAwait(false);
         }
 
         private async Task CreateCleansedNameQueueAsync(string cleansedName, bool isSessionRequired)
         {
-            var isPreviouslyCreated = await _serviceBusTypeStateService.GetIsQueueCreated(cleansedName);
+            var isPreviouslyCreated = await _serviceBusTypeStateService.GetIsQueueCreated(cleansedName).ConfigureAwait(false);
 
             if (isPreviouslyCreated) return;
 
             if (_manager.QueueExists(cleansedName))
             {
-                await _serviceBusTypeStateService.OnQueueCreated(cleansedName);
+                await _serviceBusTypeStateService.OnQueueCreated(cleansedName).ConfigureAwait(false);
                 return;
             }
             
@@ -109,19 +109,19 @@ namespace HighIronRanch.Azure.ServiceBus
                 EnableDeadLetteringOnMessageExpiration = true,
                 RequiresDuplicateDetection = true
             };
-            await _manager.CreateQueueAsync(qd);
-            await _serviceBusTypeStateService.OnQueueCreated(cleansedName);
+            await _manager.CreateQueueAsync(qd).ConfigureAwait(false);
+            await _serviceBusTypeStateService.OnQueueCreated(cleansedName).ConfigureAwait(false);
         }
 
         public async Task<QueueClient> CreateQueueClientAsync(string name)
         {
-            return await CreateQueueClientAsync(name, false);
+            return await CreateQueueClientAsync(name, false).ConfigureAwait(false);
         }
 
         public async Task<QueueClient> CreateQueueClientAsync(string name, bool isSessionRequired)
         {
             var queueName = CreateQueueName(name);            
-            await CreateCleansedNameQueueAsync(queueName, isSessionRequired);
+            await CreateCleansedNameQueueAsync(queueName, isSessionRequired).ConfigureAwait(false);
 
             return QueueClient.CreateFromConnectionString(_settings.AzureServiceBusConnectionString, queueName);
         }
@@ -129,35 +129,35 @@ namespace HighIronRanch.Azure.ServiceBus
         public async Task DeleteQueueAsync(string name)
         {
             var cleansedName = CreateQueueName(name);
-            await _manager.DeleteQueueAsync(cleansedName);
+            await _manager.DeleteQueueAsync(cleansedName).ConfigureAwait(false);
         }
 
         public async Task<TopicClient> CreateTopicClientAsync(string name)
         {
             var topicName = CreateTopicName(name);
             
-            var isPreviouslyCreated = await _serviceBusTypeStateService.GetIsTopicCreated(topicName);
+            var isPreviouslyCreated = await _serviceBusTypeStateService.GetIsTopicCreated(topicName).ConfigureAwait(false);
 
-            var topicClient = TopicClient.CreateFromConnectionString(_settings.AzureServiceBusConnectionString, topicName);;
+            var topicClient = TopicClient.CreateFromConnectionString(_settings.AzureServiceBusConnectionString, topicName);
 
             if (isPreviouslyCreated) return topicClient;
 
             if (_manager.TopicExists(topicName))
             {
-                await _serviceBusTypeStateService.OnTopicCreated(topicName);
+                await _serviceBusTypeStateService.OnTopicCreated(topicName).ConfigureAwait(false);
                 return topicClient;
             }
 
             var td = new TopicDescription(topicName);
-            await _manager.CreateTopicAsync(td);
-            await _serviceBusTypeStateService.OnTopicCreated(topicName);
+            await _manager.CreateTopicAsync(td).ConfigureAwait(false);
+            await _serviceBusTypeStateService.OnTopicCreated(topicName).ConfigureAwait(false);
             return topicClient;
         }
 
         public async Task DeleteTopicAsync(string name)
         {
             var topicName = CreateTopicName(name);
-            await _manager.DeleteTopicAsync(topicName);
+            await _manager.DeleteTopicAsync(topicName).ConfigureAwait(false);
         }
 
         public async Task<SubscriptionClient> CreateSubscriptionClientAsync(string topicName, string subscriptionName, bool isSessionRequired)
@@ -167,20 +167,20 @@ namespace HighIronRanch.Azure.ServiceBus
 
             try
             {
-                var subscription = await _manager.GetSubscriptionAsync(cleansedTopicName, cleansedSubscriptionName);
+                var subscription = await _manager.GetSubscriptionAsync(cleansedTopicName, cleansedSubscriptionName).ConfigureAwait(false);
                 if (subscription.RequiresSession == !isSessionRequired)
                 {
                     // the event has changed from/to an aggregate event, so the subscription needs to be removed and re-added to set the session flag
-                    await _manager.DeleteSubscriptionAsync(cleansedTopicName, cleansedSubscriptionName);
+                    await _manager.DeleteSubscriptionAsync(cleansedTopicName, cleansedSubscriptionName).ConfigureAwait(false);
                     subscription.RequiresSession = isSessionRequired;
-                    await _manager.CreateSubscriptionAsync(subscription);
+                    await _manager.CreateSubscriptionAsync(subscription).ConfigureAwait(false);
                 }
             }
             catch (MessagingEntityNotFoundException)
             {
                 var sd = new SubscriptionDescription(cleansedTopicName, cleansedSubscriptionName);
                 sd.RequiresSession = true;
-                await _manager.CreateSubscriptionAsync(sd);
+                await _manager.CreateSubscriptionAsync(sd).ConfigureAwait(false);
             }
 
             return SubscriptionClient.CreateFromConnectionString(_settings.AzureServiceBusConnectionString, cleansedTopicName, cleansedSubscriptionName);
@@ -190,25 +190,25 @@ namespace HighIronRanch.Azure.ServiceBus
         {
             var cleansedTopicName = CreateTopicName(topicName);
             var cleansedSubscriptionName = CreateSubscriptionName(subscriptionName);
-            await _manager.DeleteSubscriptionAsync(cleansedTopicName, cleansedSubscriptionName);
+            await _manager.DeleteSubscriptionAsync(cleansedTopicName, cleansedSubscriptionName).ConfigureAwait(false);
         }
 
         public async Task<long> GetQueueLengthAsync(string name)
         {
-            var queue = await _manager.GetQueueAsync(CreateQueueName(name));
+            var queue = await _manager.GetQueueAsync(CreateQueueName(name)).ConfigureAwait(false);
             return queue.MessageCountDetails.ActiveMessageCount;
         }
 
         public async Task<long> GetTopicLengthAsync(string name)
         {
-            var topic = await _manager.GetTopicAsync(CreateTopicName(name));
+            var topic = await _manager.GetTopicAsync(CreateTopicName(name)).ConfigureAwait(false);
             return topic.MessageCountDetails.ActiveMessageCount;
         }
 
         public async Task<long> GetQueueSessionLengthAsync(string name, bool isCommand, string sessionId)
         {
-            var queue = await CreateQueueClientAsync(name, isCommand);
-            var sessions = await queue.GetMessageSessionsAsync();
+            var queue = await CreateQueueClientAsync(name, isCommand).ConfigureAwait(false);
+            var sessions = await queue.GetMessageSessionsAsync().ConfigureAwait(false);
             return sessions.Count(x => x.SessionId == sessionId);
         }
     }

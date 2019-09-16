@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Threading;
 using System.Threading.Tasks;
 using HighIronRanch.Azure.ServiceBus.Contracts;
 using HighIronRanch.Core.Services;
@@ -15,9 +16,11 @@ namespace HighIronRanch.Azure.ServiceBus
         private readonly IDictionary<Type, Type> _queueHandlers;
         private readonly ILogger _logger;
         private readonly IScheduledMessageRepository _scheduledMessageRepository;
+        private readonly ISessionService _sessionService;
         private readonly IHandlerStatusProcessor _handlerStatusProcessor;
         private readonly string _loggerContext;
         private readonly bool _useJsonSerialization;
+        private readonly int _defaultWaitSeconds;
         private const int MaximumCommandDeliveryCount = 10;
 
         public BusCommandHandler(
@@ -26,37 +29,45 @@ namespace HighIronRanch.Azure.ServiceBus
             ILogger logger,            
             IHandlerStatusProcessor handlerStatusProcessor,
             IScheduledMessageRepository scheduledMessageRepository,
+            ISessionService sessionService,
             string loggerContext,
-            bool useJsonSerialization)
+            bool useJsonSerialization,
+            int defaultWaitSeconds)
         {
             _handlerActivator = handlerActivator;
             _queueHandlers = queueHandlers;
             _logger = logger;
             _scheduledMessageRepository = scheduledMessageRepository;
+            _sessionService = sessionService;
             _handlerStatusProcessor = handlerStatusProcessor;
             _loggerContext = loggerContext;
             _useJsonSerialization = useJsonSerialization;
+            _defaultWaitSeconds = defaultWaitSeconds;
         }
 
         public async Task OnMessageAsync(MessageSession session, BrokeredMessage messageToHandle)
-        {
-            var messageType = Type.GetType(messageToHandle.ContentType);            
+        {            
+            var messageType = Type.GetType(messageToHandle.ContentType);
+            var messageTimeout = SessionAttribute.GetWaitTimeForType(messageType, _defaultWaitSeconds);
             var stopwatch = new Stopwatch();					   
             Type handlerType = null;
             try
-            {                
+            {
+                _sessionService.Add(session);
                 if (messageType == null) return;
 
                 // don't process a message if it has been cancelled
-                if ((await _scheduledMessageRepository.GetBySessionIdMessageId(messageToHandle.SessionId, messageToHandle.MessageId))?.IsCancelled ?? false)
+                if ((await _scheduledMessageRepository.GetBySessionIdMessageId(messageToHandle.SessionId,
+                        messageToHandle.MessageId).ConfigureAwait(false))?.IsCancelled ?? false)
                 {
                     try
                     {
-                        await _scheduledMessageRepository.Delete(messageToHandle.SessionId, messageToHandle.MessageId);
+                        await _scheduledMessageRepository.Delete(messageToHandle.SessionId, messageToHandle.MessageId).ConfigureAwait(false);
                     }
                     catch (Exception ex)
                     {
-                        _logger.Error(ServiceBusWithHandlers.LoggerContext, ex, "Error removing cancelled message {0}", messageToHandle.MessageId);
+                        _logger.Error(ServiceBusWithHandlers.LoggerContext, ex, "Error removing cancelled message {0}",
+                            messageToHandle.MessageId);
                     }
 
                     return;
@@ -71,46 +82,56 @@ namespace HighIronRanch.Azure.ServiceBus
                 {
                     message = messageToHandle
                         ?.GetType()
-                        ?.GetMethod("GetBody", new Type[] {})
+                        ?.GetMethod("GetBody", new Type[] { })
                         ?.MakeGenericMethod(messageType)
-                        .Invoke(messageToHandle, new object[] {});
+                        .Invoke(messageToHandle, new object[] { });
                 }
-                
+
                 handlerType = _queueHandlers[messageType];
                 var handler = _handlerActivator.GetInstance(handlerType);
 
-                var handleMethodInfo = handlerType.GetMethod("HandleAsync", new[] { messageType, typeof(ICommandActions) });
+                var handleMethodInfo = handlerType.GetMethod("HandleAsync", new[] {messageType, typeof(ICommandActions)});
+                
                 if (handleMethodInfo != null)
-                {                    
-                    _logger.Information(_loggerContext, "Handling Command {0} {1}", messageType, handlerType);  
-                    _handlerStatusProcessor.Begin(handlerType.FullName, messageToHandle.SessionId, messageToHandle.EnqueuedTimeUtc);
-                    
-                    stopwatch.Restart();
-                    await ((Task) handleMethodInfo?.Invoke(handler, new[] {message, new CommandActions(messageToHandle)})).ConfigureAwait(false);
+                {
+                    _logger.Information(_loggerContext, "Handling Command {0} {1}", messageType, handlerType);
+                    _handlerStatusProcessor.Begin(handlerType.FullName, messageToHandle.SessionId,
+                        messageToHandle.EnqueuedTimeUtc);
+
+                    //var cancellationTokenSource = new CancellationTokenSource((int)messageTimeout.TotalMilliseconds);
+                    var cancellationTokenSource = new CancellationTokenSource();
+
+                    stopwatch.Restart();                    
+                    await ((Task) handleMethodInfo?.Invoke(handler, new[] {message, new CommandActions(messageToHandle, cancellationTokenSource.Token)})).ConfigureAwait(false);
                     stopwatch.Stop();
-                    
+
                     var elapsedSeconds = stopwatch.ElapsedMilliseconds / 1000.0;
-                    _logger.Information(_loggerContext, "Handled Command {0} {1} in {2}s", messageType, handlerType, elapsedSeconds);
+                    _logger.Information(_loggerContext, "Handled Command {0} {1} in {2}s", messageType, handlerType,
+                        elapsedSeconds);
                     _handlerStatusProcessor.Complete(handlerType.FullName, messageToHandle.SessionId, elapsedSeconds);
                 }
-                
-                await _scheduledMessageRepository.Delete(messageToHandle.SessionId, messageToHandle.MessageId).ConfigureAwait(false);                
+
+                await _scheduledMessageRepository.Delete(messageToHandle.SessionId, messageToHandle.MessageId)
+                    .ConfigureAwait(false);
 
                 stopwatch.Restart();
-                await messageToHandle.CompleteAsync();                
+                await messageToHandle.CompleteAsync().ConfigureAwait(false);
                 stopwatch.Stop();
-                _handlerStatusProcessor.BusComplete(handlerType?.FullName, messageToHandle.SessionId, stopwatch.ElapsedMilliseconds / 1000.0);                
-            } 
+                _handlerStatusProcessor.BusComplete(handlerType?.FullName, messageToHandle.SessionId,
+                    stopwatch.ElapsedMilliseconds / 1000.0);
+            }
             catch (TimeoutException ex)
             {
                 _handlerStatusProcessor.Abandon(handlerType?.FullName, messageToHandle.SessionId, ex);
                 if (messageToHandle.DeliveryCount < MaximumCommandDeliveryCount)
                 {
-                    await LogAndAbandonCommandError(AlertLevel.Warning, ex, messageToHandle, messageType, session).ConfigureAwait(false);                
+                    await LogAndAbandonCommandError(AlertLevel.Warning, ex, messageToHandle, messageType, session)
+                        .ConfigureAwait(false);
                 }
                 else
                 {
-                    await LogAndAbandonCommandError(AlertLevel.Error, ex, messageToHandle, messageType, session).ConfigureAwait(false);                
+                    await LogAndAbandonCommandError(AlertLevel.Error, ex, messageToHandle, messageType, session)
+                        .ConfigureAwait(false);
                 }
             }
             catch (Exception ex)
@@ -119,31 +140,23 @@ namespace HighIronRanch.Azure.ServiceBus
                 if (messageToHandle.DeliveryCount < MaximumCommandDeliveryCount)
                 {
                     // add in exponential spacing between retries
-                    await Task.Delay(GetDelayFromDeliveryCount(messageToHandle.DeliveryCount)).ConfigureAwait(false);
-                    await LogAndAbandonCommandError(AlertLevel.Warning, ex, messageToHandle, messageType, session).ConfigureAwait(false);
+                    await Task.Delay(SessionAttribute.GetDelayForType(messageType, messageToHandle.DeliveryCount)).ConfigureAwait(false);
+                    await LogAndAbandonCommandError(AlertLevel.Warning, ex, messageToHandle, messageType, session)
+                        .ConfigureAwait(false);
                 }
                 else
                 {
-                    await LogAndAbandonCommandError(AlertLevel.Error, ex, messageToHandle, messageType, session).ConfigureAwait(false);
+                    await LogAndAbandonCommandError(AlertLevel.Error, ex, messageToHandle, messageType, session)
+                        .ConfigureAwait(false);
                 }
             }
-        }
-
-        private int GetDelayFromDeliveryCount(int deliveryCount)
-        {            
-            switch (deliveryCount)
+            finally
             {
-                case 9:
-                    return 1000;
-                case 8:
-                    return 500;
-                case 7:
-                    return 100;
-                default:
-                    return 50;
+                _sessionService.Remove(session);
             }
         }
 
+        
         private async Task LogAndAbandonCommandError(AlertLevel alertLevel, Exception ex, BrokeredMessage messageToHandle, Type messageType, MessageSession session)
         {
             try

@@ -35,7 +35,7 @@ namespace HighIronRanch.Azure.DocumentDb
         protected virtual async Task CreateCollectionIfNecessaryAsync<T>()
         {
             var databaseLink = UriFactory.CreateDatabaseUri(_settings.DocumentDbRepositoryDatabaseId);
-            var client = await _clientFactory.GetClientAsync(_settings);
+            var client = await _clientFactory.GetClientAsync(_settings).ConfigureAwait(false);
             var collection = client.CreateDocumentCollectionQuery(databaseLink)
                                 .Where(c => c.Id == typeof(T).Name)
                                 .AsEnumerable()
@@ -51,7 +51,7 @@ namespace HighIronRanch.Azure.DocumentDb
         {
             if (!_collectionUris.ContainsKey(typeof (T)))
             {
-                await CreateCollectionIfNecessaryAsync<T>();
+                await CreateCollectionIfNecessaryAsync<T>().ConfigureAwait(false);
 
                 _collectionUris[typeof(T)] = UriFactory.CreateCollectionUri(_settings.DocumentDbRepositoryDatabaseId, typeof(T).Name);
             }
@@ -65,8 +65,8 @@ namespace HighIronRanch.Azure.DocumentDb
 
         public async Task<IQueryable<T>> GetAsync<T>() where T : IViewModel, new()
         {
-            var collectionLink = await GetCollectionLinkAsync<T>();
-            var client = await _clientFactory.GetClientAsync(_settings);
+            var collectionLink = await GetCollectionLinkAsync<T>().ConfigureAwait(false);
+            var client = await _clientFactory.GetClientAsync(_settings).ConfigureAwait(false);
             var queryable = client.CreateDocumentQuery<T>(collectionLink);
             return queryable;
         }
@@ -81,8 +81,8 @@ namespace HighIronRanch.Azure.DocumentDb
         public async Task<T> GetAsync<T>(Guid id) where T : IViewModel, new()
         {
             var documentLink = GetDocumentLink<T>(id.ToString());
-            var client = await _clientFactory.GetClientAsync(_settings);
-            var response = await client.ReadDocumentAsync(documentLink);
+            var client = await _clientFactory.GetClientAsync(_settings).ConfigureAwait(false);
+            var response = await client.ReadDocumentAsync(documentLink).ConfigureAwait(false);
             return JsonConvert.DeserializeObject<T>(response.Resource.ToString());
         }
 

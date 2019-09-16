@@ -13,8 +13,10 @@ namespace HighIronRanch.Azure.ServiceBus
         private readonly ILogger _logger;
         private readonly IHandlerStatusProcessor _handlerStatusProcessor;
         private readonly IScheduledMessageRepository _scheduledMessageRepository;
+        private readonly ISessionService _sessionService;
         private readonly string _loggerContext;
         private readonly bool _useJsonSerialization;
+        private readonly int _defaultWaitSeconds;
 
         public CommandSessionHandlerFactory(
             IHandlerActivator handlerActivator,
@@ -22,8 +24,10 @@ namespace HighIronRanch.Azure.ServiceBus
             ILogger logger,
             IHandlerStatusProcessor handlerStatusProcessor,
             IScheduledMessageRepository scheduledMessageRepository,
+            ISessionService sessionService,
             string loggerContext,
-            bool useJsonSerialization
+            bool useJsonSerialization,
+            int defaultWaitSeconds
         )
         {
             _handlerActivator = handlerActivator;
@@ -31,8 +35,10 @@ namespace HighIronRanch.Azure.ServiceBus
             _logger = logger;
             _handlerStatusProcessor = handlerStatusProcessor;
             _scheduledMessageRepository = scheduledMessageRepository;
+            _sessionService = sessionService;
             _loggerContext = loggerContext;
             _useJsonSerialization = useJsonSerialization;
+            _defaultWaitSeconds = defaultWaitSeconds;
         }
 
         public IMessageSessionAsyncHandler CreateInstance(MessageSession session, BrokeredMessage message)
@@ -43,8 +49,10 @@ namespace HighIronRanch.Azure.ServiceBus
                 _logger,
                 _handlerStatusProcessor,
                 _scheduledMessageRepository,
+                _sessionService,
                 _loggerContext,
-                _useJsonSerialization);
+                _useJsonSerialization,
+                _defaultWaitSeconds);
         }
 
         public void DisposeInstance(IMessageSessionAsyncHandler handler)

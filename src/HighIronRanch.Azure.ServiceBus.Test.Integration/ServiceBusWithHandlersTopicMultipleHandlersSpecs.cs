@@ -82,7 +82,7 @@ namespace HighIronRanch.Azure.ServiceBus.Test.Integration
 
 		public class When_sending_an_event_with_two_handlers : CleaningConcern
 		{
-			private static string _testContent = Guid.NewGuid().ToString();
+			private static readonly string _testContent = Guid.NewGuid().ToString();
 
 			private Establish context = () =>
 			{

@@ -5,20 +5,20 @@ using Microsoft.ServiceBus.Messaging;
 
 namespace HighIronRanch.Azure.ServiceBus
 {
-	internal class CommandActions : ICommandActions
-	{
-		private readonly BrokeredMessage _message;
+    internal class EventActions : IEventActions
+    {
+        private readonly BrokeredMessage _message;
 
-        public CommandActions(BrokeredMessage message, CancellationToken token)
+        public EventActions(BrokeredMessage message, CancellationToken token)
         {
             _message = message;
             CancellationToken = token;
         }
 
-		public async Task RenewLockAsync()
-		{
-			await _message.RenewLockAsync().ConfigureAwait(false);
-		}
+        public async Task RenewLockAsync()
+        {
+            await _message.RenewLockAsync().ConfigureAwait(false);
+        }
 
         public int DeliveryCount => _message.DeliveryCount;
         public bool IsLastDelivery => _message.DeliveryCount >= 9;

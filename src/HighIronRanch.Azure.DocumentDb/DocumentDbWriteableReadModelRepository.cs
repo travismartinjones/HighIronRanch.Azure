@@ -28,7 +28,7 @@ namespace HighIronRanch.Azure.DocumentDb
         protected override async Task CreateCollectionIfNecessaryAsync<T>()
         {
             var databaseLink = UriFactory.CreateDatabaseUri(_settings.DocumentDbRepositoryDatabaseId);
-            var client = await _clientFactory.GetClientAsync(_settings);
+            var client = await _clientFactory.GetClientAsync(_settings).ConfigureAwait(false);
             var collection = client.CreateDocumentCollectionQuery(databaseLink)
                                 .Where(c => c.Id == typeof(T).Name)
                                 .AsEnumerable()
@@ -36,7 +36,7 @@ namespace HighIronRanch.Azure.DocumentDb
             if (collection == null)
             {
                 _logger.Information(Common.LoggerContext, "Creating collection {0}", typeof (T).Name);
-                await client.CreateDocumentCollectionAsync(databaseLink, new DocumentCollection() { Id = typeof(T).Name });
+                await client.CreateDocumentCollectionAsync(databaseLink, new DocumentCollection() { Id = typeof(T).Name }).ConfigureAwait(false);
             }
         }
 
@@ -55,15 +55,15 @@ namespace HighIronRanch.Azure.DocumentDb
         public async Task UpdateAsync<T>(T item) where T : IViewModel
         {
             var documentLink = GetDocumentLink<T>(item.Id.ToString());
-            var client = await _clientFactory.GetClientAsync(_settings);
-            await client.UpsertDocumentAsync(documentLink, item);
+            var client = await _clientFactory.GetClientAsync(_settings).ConfigureAwait(false);
+            await client.UpsertDocumentAsync(documentLink, item).ConfigureAwait(false);
         }
 
         public async Task DeleteAsync<T>(T item) where T : IViewModel
         {
             var documentLink = GetDocumentLink<T>(item.Id.ToString());
-            var client = await _clientFactory.GetClientAsync(_settings);
-            await client.DeleteDocumentAsync(documentLink);
+            var client = await _clientFactory.GetClientAsync(_settings).ConfigureAwait(false);
+            await client.DeleteDocumentAsync(documentLink).ConfigureAwait(false);
         }
 
         public void Insert<T>(T item) where T : IViewModel
@@ -74,9 +74,9 @@ namespace HighIronRanch.Azure.DocumentDb
 
         public async Task InsertAsync<T>(T item) where T : IViewModel
         {
-            var collectionLink = await GetCollectionLinkAsync<T>();
-            var client = await _clientFactory.GetClientAsync(_settings);
-            await InsertAsync(client, collectionLink, item);
+            var collectionLink = await GetCollectionLinkAsync<T>().ConfigureAwait(false);
+            var client = await _clientFactory.GetClientAsync(_settings).ConfigureAwait(false);
+            await InsertAsync(client, collectionLink, item).ConfigureAwait(false);
         }
 
         public void Insert<T>(IEnumerable<T> items) where T : IViewModel
@@ -87,11 +87,11 @@ namespace HighIronRanch.Azure.DocumentDb
 
         public async Task InsertAsync<T>(IEnumerable<T> items) where T : IViewModel
         {
-            var collectionLink = await GetCollectionLinkAsync<T>();
-            var client = await _clientFactory.GetClientAsync(_settings);
+            var collectionLink = await GetCollectionLinkAsync<T>().ConfigureAwait(false);
+            var client = await _clientFactory.GetClientAsync(_settings).ConfigureAwait(false);
             foreach (var item in items)
             {
-                await InsertAsync(client, collectionLink, item);
+                await InsertAsync(client, collectionLink, item).ConfigureAwait(false);
             }
         }
 
@@ -103,7 +103,7 @@ namespace HighIronRanch.Azure.DocumentDb
                 tryCount--;
                 try
                 {
-                    await client.CreateDocumentAsync(collectionLink, item);
+                    await client.CreateDocumentAsync(collectionLink, item).ConfigureAwait(false);
                     return;
                 }
                 catch (DocumentClientException documentClientException)
@@ -112,7 +112,7 @@ namespace HighIronRanch.Azure.DocumentDb
                     if (statusCode == 429)
                     {
                         _logger.Warning(Common.LoggerContext, "429 http code inserting {0}", item.Id);
-                        await Task.Delay(documentClientException.RetryAfter);                        
+                        await Task.Delay(documentClientException.RetryAfter).ConfigureAwait(false);                        
                     }
                     //add other error codes to trap here e.g. 503 - Service Unavailable
                     else
@@ -151,8 +151,8 @@ namespace HighIronRanch.Azure.DocumentDb
         public async Task SaveAsync<T>(T item) where T : IViewModel
         {
             var documentLink = GetDocumentLink<T>(item.Id.ToString());
-            var client = await _clientFactory.GetClientAsync(_settings);
-            await client.ReplaceDocumentAsync(documentLink, item);
+            var client = await _clientFactory.GetClientAsync(_settings).ConfigureAwait(false);
+            await client.ReplaceDocumentAsync(documentLink, item).ConfigureAwait(false);
         }
 
         public void Truncate<T>() where T : IViewModel
@@ -165,9 +165,9 @@ namespace HighIronRanch.Azure.DocumentDb
         {
             _logger.Information(Common.LoggerContext, "Deleting collection {0}", typeof(T).Name);
 
-            var collectionLink = await GetCollectionLinkAsync<T>();
-            var client = await _clientFactory.GetClientAsync(_settings);
-            await client.DeleteDocumentCollectionAsync(collectionLink);
+            var collectionLink = await GetCollectionLinkAsync<T>().ConfigureAwait(false);
+            var client = await _clientFactory.GetClientAsync(_settings).ConfigureAwait(false);
+            await client.DeleteDocumentCollectionAsync(collectionLink).ConfigureAwait(false);
             _collectionUris.Remove(typeof (T));
         }
 
@@ -175,8 +175,8 @@ namespace HighIronRanch.Azure.DocumentDb
         {
             _logger.Information(Common.LoggerContext, "Deleting database {0}", _settings.DocumentDbRepositoryDatabaseId);
 
-            var client = await _clientFactory.GetClientAsync(_settings);
-            await client.DeleteDatabaseAsync(UriFactory.CreateDatabaseUri(_settings.DocumentDbRepositoryDatabaseId));
+            var client = await _clientFactory.GetClientAsync(_settings).ConfigureAwait(false);
+            await client.DeleteDatabaseAsync(UriFactory.CreateDatabaseUri(_settings.DocumentDbRepositoryDatabaseId)).ConfigureAwait(false);
         }
     }
 }
