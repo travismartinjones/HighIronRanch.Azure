@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Runtime.Serialization.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using HighIronRanch.Azure.ServiceBus.Contracts;
@@ -65,7 +66,7 @@ namespace HighIronRanch.Azure.ServiceBus
                     return;
                 }
 
-                var message = JsonConvert.DeserializeObject(messageToHandle.GetBody<string>(), messageType);             
+                var message = JsonConvert.DeserializeObject(messageToHandle.GetBody<string>(new DataContractJsonSerializer(typeof(string))), messageType);             
                 handlerType = _queueHandlers[messageType];
                 var handler = _handlerActivator.GetInstance(handlerType);
 
@@ -101,7 +102,6 @@ namespace HighIronRanch.Azure.ServiceBus
             }
             catch (TimeoutException ex)
             {
-                _handlerStatusProcessor.Abandon(handlerType?.FullName, messageToHandle.SessionId, ex);
                 if (messageToHandle.SystemProperties.DeliveryCount < MaximumCommandDeliveryCount)
                 {
                     await LogAndAbandonCommandError(AlertLevel.Warning, ex, messageToHandle, messageType, session)
@@ -112,10 +112,10 @@ namespace HighIronRanch.Azure.ServiceBus
                     await LogAndAbandonCommandError(AlertLevel.Error, ex, messageToHandle, messageType, session)
                         .ConfigureAwait(false);
                 }
+                _handlerStatusProcessor.Abandon(handlerType?.FullName ?? messageToHandle.ContentType, messageToHandle.SessionId, ex);
             }
             catch (Exception ex)
             {
-                _handlerStatusProcessor.Error(handlerType?.FullName, messageToHandle.SessionId, ex);
                 if (messageToHandle.SystemProperties.DeliveryCount < MaximumCommandDeliveryCount)
                 {
                     // add in exponential spacing between retries
@@ -128,6 +128,7 @@ namespace HighIronRanch.Azure.ServiceBus
                     await LogAndAbandonCommandError(AlertLevel.Error, ex, messageToHandle, messageType, session)
                         .ConfigureAwait(false);
                 }
+                _handlerStatusProcessor.Error(handlerType?.FullName ?? messageToHandle.ContentType, messageToHandle.SessionId, ex);
             }
         }
 

@@ -435,7 +435,7 @@ namespace HighIronRanch.Azure.ServiceBus
                     options.MaxAutoRenewDuration = options.MaxAutoRenewDuration < waitTime
                         ? new TimeSpan(waitTime.Ticks * _autoRenewMultiplier)
                         : options.MaxAutoRenewDuration;
-
+                    
                     client.RegisterSessionHandler(async (session, message, token) =>
                     {
                         try

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Runtime.Serialization.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using HighIronRanch.Azure.ServiceBus.Contracts;
@@ -47,7 +48,7 @@ namespace HighIronRanch.Azure.ServiceBus
             {
                 if (eventType == null) return;
 
-                var message = JsonConvert.DeserializeObject(eventToHandle.GetBody<string>(), eventType);
+                var message = JsonConvert.DeserializeObject(eventToHandle.GetBody<string>(new DataContractJsonSerializer(typeof(string))), eventType);
 
                 var handlerTypes = _eventHandlers[eventType];
 
@@ -85,7 +86,6 @@ namespace HighIronRanch.Azure.ServiceBus
             }
             catch (TimeoutException ex)
             {
-                _handlerStatusProcessor.Abandon(lastHandlerType?.FullName, eventToHandle.SessionId, ex);
                 if (eventToHandle.SystemProperties.DeliveryCount < MaximumEventDeliveryCount)
                 {
                     await LogAndAbandonEventError(session, AlertLevel.Warning, ex, eventToHandle, eventType).ConfigureAwait(false);
@@ -95,10 +95,10 @@ namespace HighIronRanch.Azure.ServiceBus
                     await LogAndAbandonEventError(session, AlertLevel.Error, ex, eventToHandle, eventType)
                         .ConfigureAwait(false);
                 }
+                _handlerStatusProcessor.Abandon(lastHandlerType?.FullName ?? eventToHandle.ContentType, eventToHandle.SessionId, ex);
             }
             catch (Exception ex)
             {
-                _handlerStatusProcessor.Error(lastHandlerType?.FullName, eventToHandle.SessionId, ex);
                 if (eventToHandle.SystemProperties.DeliveryCount < MaximumEventDeliveryCount)
                 {
                     // add in exponential spacing between retries
@@ -111,6 +111,7 @@ namespace HighIronRanch.Azure.ServiceBus
                     await LogAndAbandonEventError(session, AlertLevel.Error, ex, eventToHandle, eventType)
                         .ConfigureAwait(false);
                 }
+                _handlerStatusProcessor.Error(lastHandlerType?.FullName ?? eventToHandle.ContentType, eventToHandle.SessionId, ex);
             }
         }        
 
