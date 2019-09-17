@@ -17,6 +17,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HighIronRanch.Azure.Service
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HighIronRanch.Azure.TableStorage", "HighIronRanch.Azure.TableStorage\HighIronRanch.Azure.TableStorage.csproj", "{3931F0D2-1DEE-47A7-94D9-B04506E23EC4}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Test", "Test", "{62D9836F-AD59-4873-88DA-F72A7A70BCE1}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -54,6 +56,12 @@ Global
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{366B9551-E784-46A8-8BD8-ED0DB4DEB39E} = {62D9836F-AD59-4873-88DA-F72A7A70BCE1}
+		{5572B92D-8BC6-41A5-9422-73135B8413BD} = {62D9836F-AD59-4873-88DA-F72A7A70BCE1}
+		{A500165C-BAAF-4EC1-9174-F9FE0420A328} = {62D9836F-AD59-4873-88DA-F72A7A70BCE1}
+		{9BE5F83F-E63B-4D20-B55A-4ED2BE0B90BA} = {62D9836F-AD59-4873-88DA-F72A7A70BCE1}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {DB7FD37D-5583-4B21-8E4A-5E8222303020}
