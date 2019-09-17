@@ -2,8 +2,8 @@ using System.Threading.Tasks;
 
 namespace HighIronRanch.Azure.ServiceBus.Contracts
 {
-	public interface IEventHandler<T> where T : IEvent
+	public interface IEventHandler<in T> where T : IEvent
 	{
-		Task HandleAsync(T evt);
+		Task HandleAsync(T evt, IEventActions eventActions);
 	}
 }

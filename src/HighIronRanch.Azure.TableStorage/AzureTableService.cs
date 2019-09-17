@@ -32,13 +32,13 @@ namespace HighIronRanch.Azure.TableStorage
 			
 			var table = client.GetTableReference(cleansedTableName);
 			if(shouldCreateIfNotExists)
-				await table.CreateIfNotExistsAsync();
+				await table.CreateIfNotExistsAsync().ConfigureAwait(false);
 			return table;
 		}
 
 		public async Task<CloudTable> GetTable(string tableName)
 		{
-			return await GetTable(tableName, true);
+			return await GetTable(tableName, true).ConfigureAwait(false);
 		}
 
 	}

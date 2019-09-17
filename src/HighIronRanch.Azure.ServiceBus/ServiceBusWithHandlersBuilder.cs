@@ -31,19 +31,31 @@ namespace HighIronRanch.Azure.ServiceBus
 
 		private bool _hasMultipleDeployments = true;
 		private bool _useJsonSerialization = true;
+        private readonly IHandlerStatusProcessor _handlerStatusProcessor;
+        private readonly int _maxConcurrentSessions;
+        private readonly int _defaultWaitSeconds;
+        private readonly int _autoRenewMultiplier;
 
-		public ServiceBusWithHandlersBuilder(
+        public ServiceBusWithHandlersBuilder(
             IServiceBus serviceBus, 
             IHandlerActivator handlerActivator, 
             ILogger logger, 
-            IScheduledMessageRepository scheduledMessageRepository,
-            IServiceBusSettings serviceBusSettings)
-		{
-			_serviceBus = serviceBus;
-			_handlerActivator = handlerActivator;
-			_logger = logger;
+            IScheduledMessageRepository scheduledMessageRepository, 
+            IHandlerStatusProcessor handlerStatusProcessor,
+            IServiceBusSettings serviceBusSettings,
+            int maxConcurrentSessions,
+            int defaultWaitSeconds,
+            int autoRenewMultiplier)
+        {
+            _serviceBus = serviceBus;
+            _handlerActivator = handlerActivator;
+            _logger = logger;
             _scheduledMessageRepository = scheduledMessageRepository;
+            _handlerStatusProcessor = handlerStatusProcessor;
             _serviceBusSettings = serviceBusSettings;
+            _maxConcurrentSessions = maxConcurrentSessions;
+            _defaultWaitSeconds = defaultWaitSeconds;
+            _autoRenewMultiplier = autoRenewMultiplier;
         }
 
 		public ServiceBusWithHandlersBuilder CreateServiceBus()
@@ -152,27 +164,27 @@ namespace HighIronRanch.Azure.ServiceBus
 
 		public async Task<ServiceBusWithHandlers> BuildAsync()
 		{
-			var bus = new ServiceBusWithHandlers(_serviceBus, _handlerActivator, _logger, _scheduledMessageRepository);
+			var bus = new ServiceBusWithHandlers(_serviceBus, _handlerActivator, _logger, _handlerStatusProcessor, _scheduledMessageRepository, _maxConcurrentSessions, _defaultWaitSeconds, _autoRenewMultiplier);
 		    
             var connection = new ServiceBusConnection(_serviceBusSettings.AzureServiceBusConnectionString);
 
-			await CreateHandledQueuesInAssembliesAsync(connection, bus);
+			await CreateHandledQueuesInAssembliesAsync(connection, bus).ConfigureAwait(false);
 
-			await CreateSpecificHandledQueuesAsync(connection, bus);
+			await CreateSpecificHandledQueuesAsync(connection, bus).ConfigureAwait(false);
 
-			await CreateQueuesInAssembliesAsync(connection, bus);
+			await CreateQueuesInAssembliesAsync(connection, bus).ConfigureAwait(false);
 
-			await CreateSpecificQueuesAsync(connection, bus);
+			await CreateSpecificQueuesAsync(connection, bus).ConfigureAwait(false);
 
-			await CreateHandledEventsInAssembliesAsync(connection, bus);
+			await CreateHandledEventsInAssembliesAsync(connection, bus).ConfigureAwait(false);
 
-			await CreateSpecificHandledEventsAsync(connection, bus);
+			await CreateSpecificHandledEventsAsync(connection, bus).ConfigureAwait(false);
 
-			await CreateEventsInAssembliesAsync(connection, bus);
+			await CreateEventsInAssembliesAsync(connection, bus).ConfigureAwait(false);
 
-			await CreateSpecificEventsAsync(connection, bus);
+			await CreateSpecificEventsAsync(connection, bus).ConfigureAwait(false);
 
-		    await bus.StartHandlers(connection);
+		    await bus.StartHandlers(connection).ConfigureAwait(false);
 
 			return bus;
 		}
@@ -181,7 +193,7 @@ namespace HighIronRanch.Azure.ServiceBus
 		{
 			if (_messageTypes != null)
 			{
-				await CreateQueuesAsync(connection, _messageTypes, bus);
+				await CreateQueuesAsync(connection, _messageTypes, bus).ConfigureAwait(false);
 			}
 		}
 
@@ -189,7 +201,7 @@ namespace HighIronRanch.Azure.ServiceBus
 		{
 			if (_eventTypes != null)
 			{
-				await CreateEventsAsync(connection, _eventTypes, bus);
+				await CreateEventsAsync(connection, _eventTypes, bus).ConfigureAwait(false);
 			}
 		}
 
@@ -207,7 +219,7 @@ namespace HighIronRanch.Azure.ServiceBus
                 var found = string.Join(",", commandTypesInAssemblies.Select(e => e.Name));
                 _logger.Debug(ServiceBusWithHandlers.LoggerContext, "Found the following commands: {0}", found);
 
-                await CreateQueuesAsync(connection, commandTypesInAssemblies, bus);
+                await CreateQueuesAsync(connection, commandTypesInAssemblies, bus).ConfigureAwait(false);
 			}
 		}
 
@@ -225,7 +237,7 @@ namespace HighIronRanch.Azure.ServiceBus
                 var found = string.Join(",", eventTypesInAssemblies.Select(e => e.Name));
                 _logger.Debug(ServiceBusWithHandlers.LoggerContext, "Found the following events: {0}", found);
 
-				await CreateEventsAsync(connection, eventTypesInAssemblies, bus);
+				await CreateEventsAsync(connection, eventTypesInAssemblies, bus).ConfigureAwait(false);
 			}
 		}
 
@@ -233,7 +245,7 @@ namespace HighIronRanch.Azure.ServiceBus
 		{
 			if (_messageHandlerTypes != null)
 			{
-				await CreateHandledQueuesAsync(connection, _messageHandlerTypes, bus);
+				await CreateHandledQueuesAsync(connection, _messageHandlerTypes, bus).ConfigureAwait(false);
 			}
 		}
 
@@ -241,7 +253,7 @@ namespace HighIronRanch.Azure.ServiceBus
 		{
 			if (_eventHandlerTypes != null)
 			{
-				await CreateHandledEventsAsync(connection, _eventHandlerTypes, bus);
+				await CreateHandledEventsAsync(connection, _eventHandlerTypes, bus).ConfigureAwait(false);
 			}
 		}
 
@@ -267,7 +279,7 @@ namespace HighIronRanch.Azure.ServiceBus
                 var found = string.Join(",", eventHandlerTypesInAssemblies.Select(e => e.Name));
                 _logger.Debug(ServiceBusWithHandlers.LoggerContext, "Found the following event handlers: {0}", found);
 
-                await CreateHandledEventsAsync(connection, eventHandlerTypesInAssemblies, bus);
+                await CreateHandledEventsAsync(connection, eventHandlerTypesInAssemblies, bus).ConfigureAwait(false);
 			}
 		}
 
@@ -285,7 +297,7 @@ namespace HighIronRanch.Azure.ServiceBus
                 var found = string.Join(",", handlerTypesInAssemblies.Select(e => e.Name));
                 _logger.Debug(ServiceBusWithHandlers.LoggerContext, "Found the following command handlers: {0}", found);
 
-                await CreateHandledQueuesAsync(connection, handlerTypesInAssemblies, bus);
+                await CreateHandledQueuesAsync(connection, handlerTypesInAssemblies, bus).ConfigureAwait(false);
 			}
 		}
 
@@ -293,7 +305,7 @@ namespace HighIronRanch.Azure.ServiceBus
 		{
 			foreach (var commandType in commandTypes)
 			{
-				await bus.CreateQueueAsync(connection, commandType);
+				await bus.CreateQueueAsync(connection, commandType).ConfigureAwait(false);
 			}
 		}
 
@@ -301,7 +313,7 @@ namespace HighIronRanch.Azure.ServiceBus
 		{
 			foreach (var eventType in eventTypes)
 			{
-				await bus.CreateTopicAsync(connection, eventType);
+				await bus.CreateTopicAsync(connection, eventType).ConfigureAwait(false);
 			}
 		}
 
@@ -309,7 +321,7 @@ namespace HighIronRanch.Azure.ServiceBus
 		{
 			foreach (var handlerType in handlerTypes)
 			{
-				await bus.CreateHandledQueueAsync(connection, handlerType);
+				await bus.CreateHandledQueueAsync(connection, handlerType).ConfigureAwait(false);
 			}
 		}
 
@@ -317,7 +329,7 @@ namespace HighIronRanch.Azure.ServiceBus
 		{
 			foreach (var eventType in eventHandlerTypes)
 			{
-				await bus.CreateHandledEventAsync(connection, eventType);
+				await bus.CreateHandledEventAsync(connection, eventType).ConfigureAwait(false);
 			}
 		}
 	}
