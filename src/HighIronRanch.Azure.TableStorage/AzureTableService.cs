@@ -5,12 +5,7 @@ using Microsoft.WindowsAzure.Storage.Table;
 
 namespace HighIronRanch.Azure.TableStorage
 {
-	public interface IAzureTableSettings
-	{
-		string AzureStorageConnectionString { get; }
-	}
-
-	public class AzureTableService : IAzureTableService
+    public class AzureTableService : IAzureTableService
 	{
 		private readonly IAzureTableSettings _appSettings;
 

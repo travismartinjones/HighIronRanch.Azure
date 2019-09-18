@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -8,6 +9,7 @@ using System.Threading.Tasks;
 using HighIronRanch.Azure.ServiceBus.Contracts;
 using HighIronRanch.Core.Services;
 using Microsoft.Azure.ServiceBus;
+using Microsoft.Azure.ServiceBus.InteropExtensions;
 using Newtonsoft.Json;
 using ExceptionReceivedEventArgs = Microsoft.Azure.ServiceBus.ExceptionReceivedEventArgs;
 using QueueClient = Microsoft.Azure.ServiceBus.QueueClient;
@@ -144,13 +146,18 @@ namespace HighIronRanch.Azure.ServiceBus
             if (options.EnqueueTime.HasValue && (options.EnqueueTime.Value - DateTime.UtcNow).TotalSeconds < 2)
                 options.EnqueueTime = null;
 
-            var message = JsonConvert.SerializeObject(command);
-            var brokeredMessage = new Message(Encoding.UTF8.GetBytes(message))
+            var serializer = DataContractBinarySerializer<string>.Instance;
+            Message brokeredMessage;
+            using (var buffer = new MemoryStream())
             {
-                MessageId = command.MessageId.ToString(),
-                ContentType = command.GetType().AssemblyQualifiedName
-            };            
-
+                serializer.WriteObject(buffer, JsonConvert.SerializeObject(command));
+                brokeredMessage = new Message(buffer.ToArray())
+                {
+                    MessageId = command.MessageId.ToString(),
+                    ContentType = command.GetType().AssemblyQualifiedName
+                };
+            }
+            
 			brokeredMessage.ContentType = command.GetType().AssemblyQualifiedName;
 			if (isCommand)
 			{
@@ -269,6 +276,7 @@ namespace HighIronRanch.Azure.ServiceBus
                 else
                 {
                     await client.SendAsync(brokeredMessage).ConfigureAwait(false);
+                    await client.SendAsync(brokeredMessage).ConfigureAwait(false);
                 }
             }
 		    catch (Exception)
@@ -316,19 +324,24 @@ namespace HighIronRanch.Azure.ServiceBus
 
             var isAggregateEvent = evt is IAggregateEvent;
 
-            var message = JsonConvert.SerializeObject(evt);
-            var brokeredMessage = new Message(Encoding.UTF8.GetBytes(message)) { MessageId = evt.MessageId.ToString() };
+            var serializer = DataContractBinarySerializer<string>.Instance;
+            Message brokeredMessage;
+            using (var buffer = new MemoryStream())
+            {
+                serializer.WriteObject(buffer, JsonConvert.SerializeObject(evt));
+                brokeredMessage = new Message(buffer.ToArray()) {MessageId = evt.MessageId.ToString()};                
+            }
 
             if (isAggregateEvent)
             {
-                var aggregateEvent = ((IAggregateEvent)evt);
+                var aggregateEvent = ((IAggregateEvent) evt);
                 brokeredMessage.SessionId = aggregateEvent.GetAggregateId();
             }
 
             brokeredMessage.ContentType = evt.GetType().AssemblyQualifiedName;
 
             _logger.Debug(LoggerContext, "Publishing event {0} to {1}", evt.GetType().Name, client.GetType().Name);
-            await client.SendAsync(brokeredMessage).ConfigureAwait(false);
+            await client.SendAsync(brokeredMessage).ConfigureAwait(false);                
         }        
 
         public async Task StartHandlers(ServiceBusConnection connection)

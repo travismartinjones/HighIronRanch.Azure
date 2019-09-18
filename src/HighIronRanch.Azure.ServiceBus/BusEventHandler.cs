@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Runtime.Serialization.Json;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using HighIronRanch.Azure.ServiceBus.Contracts;
@@ -48,7 +50,9 @@ namespace HighIronRanch.Azure.ServiceBus
             {
                 if (eventType == null) return;
 
-                var message = JsonConvert.DeserializeObject(eventToHandle.GetBody<string>(new DataContractJsonSerializer(typeof(string))), eventType);
+                var serializer = DataContractBinarySerializer<string>.Instance;
+                var bodyContent = (string)serializer.ReadObject(new MemoryStream(eventToHandle.Body));
+                var message = JsonConvert.DeserializeObject(bodyContent, eventType);
 
                 var handlerTypes = _eventHandlers[eventType];
 
