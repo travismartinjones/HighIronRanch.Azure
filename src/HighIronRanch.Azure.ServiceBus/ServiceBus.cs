@@ -43,10 +43,15 @@ namespace HighIronRanch.Azure.ServiceBus
                 .Build();
         }
 
+        protected static string CorrectInvalidCharacters(string name)
+        {
+            return Regex.Replace(name, @"[^a-zA-Z0-9\.\-_]", "_");
+        }
+
         protected static string CleanseName(string name)
         {
             // Entity segments can contain only letters, numbers, periods (.), hyphens (-), and underscores (_)
-            return Regex.Replace(name, @"[^a-zA-Z0-9\.\-_]", "_").ToLower();
+            return CorrectInvalidCharacters(name).ToLower();
         }
 
         protected string CreatePrefix()
@@ -70,7 +75,7 @@ namespace HighIronRanch.Azure.ServiceBus
 
         protected string CreateSubscriptionName(string name)
         {
-            var subname = $"s.{CreatePrefix()}{CleanseName(_settings.ServiceBusSubscriptionNamePrefix)}";
+            var subname = $"s.{CreatePrefix()}{CorrectInvalidCharacters(_settings.ServiceBusSubscriptionNamePrefix)}";
 
             if (subname.Length > 50)
                 throw new ArgumentException($"Resulting subscription {nameof(name)} '{subname}' is longer than 50 character limit", nameof(name));
@@ -149,26 +154,28 @@ namespace HighIronRanch.Azure.ServiceBus
         {
             var cleansedTopicName = CreateTopicName(topicName);
             var cleansedSubscriptionName = CreateSubscriptionName(subscriptionName);
+            var topicSubscriptionName = cleansedTopicName + "|" + cleansedSubscriptionName;
 
-            try
-            {
-                var subscription = await _manager.GetSubscriptionAsync(cleansedTopicName, cleansedSubscriptionName).ConfigureAwait(false);
-                if (subscription.RequiresSession == !isSessionRequired)
-                {
-                    // the event has changed from/to an aggregate event, so the subscription needs to be removed and re-added to set the session flag
-                    await _manager.DeleteSubscriptionAsync(cleansedTopicName, cleansedSubscriptionName).ConfigureAwait(false);
-                    subscription.RequiresSession = isSessionRequired;
-                    await _manager.CreateSubscriptionAsync(subscription).ConfigureAwait(false);
-                }
-            }
-            catch (MessagingEntityNotFoundException)
-            {
-                var sd = new SubscriptionDescription(cleansedTopicName, cleansedSubscriptionName);
-                sd.RequiresSession = true;
-                await _manager.CreateSubscriptionAsync(sd).ConfigureAwait(false);
-            }
+            var isPreviouslyCreated = await _serviceBusTypeStateService.GetIsSubscriptionCreated(topicSubscriptionName).ConfigureAwait(false);
 
-            return new SubscriptionClient(connection, cleansedTopicName, cleansedSubscriptionName, ReceiveMode.PeekLock, RetryPolicy.Default);
-        }        
+            var subscriptionClient = new SubscriptionClient(connection, cleansedTopicName, cleansedSubscriptionName, ReceiveMode.PeekLock, RetryPolicy.Default);
+
+            if (isPreviouslyCreated) return subscriptionClient;
+
+            if (await _manager.SubscriptionExistsAsync(cleansedTopicName, cleansedSubscriptionName).ConfigureAwait(false))
+            {
+                await _serviceBusTypeStateService.OnSubscriptionCreated(topicSubscriptionName).ConfigureAwait(false);
+                return subscriptionClient;
+            }
+            
+            _logger.Information(ServiceBusWithHandlers.LoggerContext, "Creating subscription {0}", cleansedSubscriptionName);
+            await _manager.CreateSubscriptionAsync(new SubscriptionDescription(cleansedTopicName,cleansedSubscriptionName)
+            {
+                RequiresSession = isSessionRequired,
+                EnableDeadLetteringOnMessageExpiration = true                
+            }).ConfigureAwait(false);
+            await _serviceBusTypeStateService.OnSubscriptionCreated(topicSubscriptionName).ConfigureAwait(false);
+            return subscriptionClient;
+        }
     }
 }

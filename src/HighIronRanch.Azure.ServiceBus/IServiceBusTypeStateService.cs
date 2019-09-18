@@ -8,5 +8,7 @@ namespace HighIronRanch.Azure.ServiceBus
         Task OnQueueCreated(string name);
         Task<bool> GetIsTopicCreated(string name);
         Task OnTopicCreated(string name);
+        Task<bool> GetIsSubscriptionCreated(string name);
+        Task OnSubscriptionCreated(string name);
     }
 }
