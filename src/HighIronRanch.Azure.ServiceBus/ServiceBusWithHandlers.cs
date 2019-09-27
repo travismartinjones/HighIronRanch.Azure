@@ -279,9 +279,9 @@ namespace HighIronRanch.Azure.ServiceBus
                     await client.SendAsync(brokeredMessage).ConfigureAwait(false);
                 }
             }
-		    catch (Exception)
+		    catch (Exception ex)
 		    {
-		        _logger.Error(LoggerContext, "Sending command {0}", command.GetType().ToString());
+		        _logger.Error(LoggerContext, "Sending command {0}", ex, command.GetType().ToString());
 		    }
 
 		    _logger.Information(LoggerContext, "Sent command {0}", command.GetType().ToString());
@@ -341,7 +341,15 @@ namespace HighIronRanch.Azure.ServiceBus
             brokeredMessage.ContentType = evt.GetType().AssemblyQualifiedName;
 
             _logger.Debug(LoggerContext, "Publishing event {0} to {1}", evt.GetType().Name, client.GetType().Name);
-            await client.SendAsync(brokeredMessage).ConfigureAwait(false);                
+
+            try
+            {
+                await client.SendAsync(brokeredMessage).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Error publishing {evt.GetType().Name} {(isAggregateEvent ? ((IAggregateEvent) evt).GetAggregateId() : "")}",ex);
+            }
         }        
 
         public async Task StartHandlers(ServiceBusConnection connection)
