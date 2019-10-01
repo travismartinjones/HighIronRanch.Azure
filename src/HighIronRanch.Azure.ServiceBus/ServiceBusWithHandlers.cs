@@ -384,6 +384,7 @@ namespace HighIronRanch.Azure.ServiceBus
                         ? new TimeSpan(waitTime.Ticks * _autoRenewMultiplier)
                         : options.MaxAutoRenewDuration;
 
+                    _logger.Information(LoggerContext, $"Creating session handler for event {eventType}");
                     client.RegisterSessionHandler(async (session, message, token) =>
                     {
                         try
@@ -457,6 +458,7 @@ namespace HighIronRanch.Azure.ServiceBus
                         ? new TimeSpan(waitTime.Ticks * _autoRenewMultiplier)
                         : options.MaxAutoRenewDuration;
                     
+                    _logger.Information(LoggerContext, $"Creating session handler for command {messageType}");
                     client.RegisterSessionHandler(async (session, message, token) =>
                     {
                         try

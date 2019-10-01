@@ -35,6 +35,7 @@ namespace HighIronRanch.Azure.ServiceBus
         private readonly int _maxConcurrentSessions;
         private readonly int _defaultWaitSeconds;
         private readonly int _autoRenewMultiplier;
+        private readonly double _connectionTimeoutSeconds;
 
         public ServiceBusWithHandlersBuilder(
             IServiceBus serviceBus, 
@@ -45,7 +46,8 @@ namespace HighIronRanch.Azure.ServiceBus
             IServiceBusSettings serviceBusSettings,
             int maxConcurrentSessions,
             int defaultWaitSeconds,
-            int autoRenewMultiplier)
+            int autoRenewMultiplier,
+            double? connectionTimeoutSeconds = 60)
         {
             _serviceBus = serviceBus;
             _handlerActivator = handlerActivator;
@@ -56,6 +58,7 @@ namespace HighIronRanch.Azure.ServiceBus
             _maxConcurrentSessions = maxConcurrentSessions;
             _defaultWaitSeconds = defaultWaitSeconds;
             _autoRenewMultiplier = autoRenewMultiplier;
+            _connectionTimeoutSeconds = connectionTimeoutSeconds ?? 60;
         }
 
 		public ServiceBusWithHandlersBuilder CreateServiceBus()
@@ -165,10 +168,13 @@ namespace HighIronRanch.Azure.ServiceBus
 		public async Task<ServiceBusWithHandlers> BuildAsync()
 		{
 			var bus = new ServiceBusWithHandlers(_serviceBus, _handlerActivator, _logger, _handlerStatusProcessor, _scheduledMessageRepository, _maxConcurrentSessions, _defaultWaitSeconds, _autoRenewMultiplier);
-		    
-            var connection = new ServiceBusConnection(_serviceBusSettings.AzureServiceBusConnectionString);
 
-			await CreateHandledQueuesInAssembliesAsync(connection, bus).ConfigureAwait(false);
+            var connection = new ServiceBusConnection(_serviceBusSettings.AzureServiceBusConnectionString)
+            {
+                OperationTimeout = TimeSpan.FromSeconds(_connectionTimeoutSeconds)
+            };
+
+            await CreateHandledQueuesInAssembliesAsync(connection, bus).ConfigureAwait(false);
 
 			await CreateSpecificHandledQueuesAsync(connection, bus).ConfigureAwait(false);
 
