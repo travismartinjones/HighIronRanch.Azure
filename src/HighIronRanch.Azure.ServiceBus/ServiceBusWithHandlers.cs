@@ -433,6 +433,7 @@ namespace HighIronRanch.Azure.ServiceBus
 		                    var options = new SessionHandlerOptions
 		                    {
 		                        AutoComplete = false,
+                                MaxConcurrentSessions = _maxConcurrentSessions
 		                    };
                             var waitTime = SessionAttribute.GetWaitTimeForType(messageType,_defaultWaitSeconds);
                             options.MessageWaitTimeout = options.MessageWaitTimeout < waitTime ? waitTime : options.MessageWaitTimeout;
@@ -472,7 +473,8 @@ namespace HighIronRanch.Azure.ServiceBus
 		                        var options = new SessionHandlerOptions
 		                        {
 		                            AutoComplete = false,
-		                        };
+                                    MaxConcurrentSessions = _maxConcurrentSessions,
+                                };
                                 var waitTime = SessionAttribute.GetWaitTimeForType(eventType,_defaultWaitSeconds);
                                 options.MessageWaitTimeout = options.MessageWaitTimeout < waitTime ? waitTime : options.MessageWaitTimeout;
                                 options.AutoRenewTimeout = options.AutoRenewTimeout < waitTime ? new TimeSpan(waitTime.Ticks * _autoRenewMultiplier) : options.AutoRenewTimeout;
@@ -500,7 +502,9 @@ namespace HighIronRanch.Azure.ServiceBus
 		                        var options = new SessionHandlerOptions
 		                        {
 		                            AutoComplete = false,
+                                    MaxConcurrentSessions = _maxConcurrentSessions
 		                        };
+                                
                                 var waitTime = SessionAttribute.GetWaitTimeForType(eventType, _defaultWaitSeconds);
                                 options.MessageWaitTimeout = options.MessageWaitTimeout < waitTime ? waitTime : options.MessageWaitTimeout;
                                 options.AutoRenewTimeout = options.AutoRenewTimeout < waitTime ? new TimeSpan(waitTime.Ticks * _autoRenewMultiplier) : options.AutoRenewTimeout;

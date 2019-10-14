@@ -26,7 +26,7 @@ namespace HighIronRanch.Azure.ServiceBus
         public BusCommandHandler(
             IHandlerActivator handlerActivator,
             IDictionary<Type, Type> queueHandlers,
-            ILogger logger,            
+            ILogger logger,
             IHandlerStatusProcessor handlerStatusProcessor,
             IScheduledMessageRepository scheduledMessageRepository,
             ISessionService sessionService,
@@ -46,10 +46,9 @@ namespace HighIronRanch.Azure.ServiceBus
         }
 
         public async Task OnMessageAsync(MessageSession session, BrokeredMessage messageToHandle)
-        {            
+        {
             var messageType = Type.GetType(messageToHandle.ContentType);
-            var messageTimeout = SessionAttribute.GetWaitTimeForType(messageType, _defaultWaitSeconds);
-            var stopwatch = new Stopwatch();					   
+            var stopwatch = new Stopwatch();
             Type handlerType = null;
             try
             {
@@ -90,19 +89,17 @@ namespace HighIronRanch.Azure.ServiceBus
                 handlerType = _queueHandlers[messageType];
                 var handler = _handlerActivator.GetInstance(handlerType);
 
-                var handleMethodInfo = handlerType.GetMethod("HandleAsync", new[] {messageType, typeof(ICommandActions)});
-                
+                var handleMethodInfo = handlerType.GetMethod("HandleAsync", new[] { messageType, typeof(ICommandActions) });
+
                 if (handleMethodInfo != null)
                 {
                     _logger.Information(_loggerContext, "Handling Command {0} {1}", messageType, handlerType);
-                    _handlerStatusProcessor.Begin(handlerType.FullName, messageToHandle.SessionId,
-                        messageToHandle.EnqueuedTimeUtc);
+                    _handlerStatusProcessor.Begin(handlerType.FullName, messageToHandle.SessionId, messageToHandle.EnqueuedTimeUtc);
 
-                    //var cancellationTokenSource = new CancellationTokenSource((int)messageTimeout.TotalMilliseconds);
                     var cancellationTokenSource = new CancellationTokenSource();
 
-                    stopwatch.Restart();                    
-                    await ((Task) handleMethodInfo?.Invoke(handler, new[] {message, new CommandActions(messageToHandle, cancellationTokenSource.Token)})).ConfigureAwait(false);
+                    stopwatch.Restart();
+                    await ((Task)handleMethodInfo?.Invoke(handler, new[] { message, new CommandActions(messageToHandle, cancellationTokenSource.Token) })).ConfigureAwait(false);
                     stopwatch.Stop();
 
                     var elapsedSeconds = stopwatch.ElapsedMilliseconds / 1000.0;
@@ -117,8 +114,7 @@ namespace HighIronRanch.Azure.ServiceBus
                 stopwatch.Restart();
                 await messageToHandle.CompleteAsync().ConfigureAwait(false);
                 stopwatch.Stop();
-                _handlerStatusProcessor.BusComplete(handlerType?.FullName, messageToHandle.SessionId,
-                    stopwatch.ElapsedMilliseconds / 1000.0);
+                _handlerStatusProcessor.BusComplete(handlerType?.FullName, messageToHandle.SessionId, stopwatch.ElapsedMilliseconds / 1000.0);
             }
             catch (TimeoutException ex)
             {
@@ -156,26 +152,26 @@ namespace HighIronRanch.Azure.ServiceBus
             }
         }
 
-        
+
         private async Task LogAndAbandonCommandError(AlertLevel alertLevel, Exception ex, BrokeredMessage messageToHandle, Type messageType, MessageSession session)
         {
             try
             {
-                if(alertLevel == AlertLevel.Error)
+                if (alertLevel == AlertLevel.Error)
                     _logger.Error(_loggerContext, ex, "Command Error {0} retry {1}", messageType, messageToHandle.DeliveryCount);
-                else if(alertLevel == AlertLevel.Warning)
+                else if (alertLevel == AlertLevel.Warning)
                     _logger.Warning(_loggerContext, ex, "Command Warning {0} retry {1}", messageType, messageToHandle.DeliveryCount);
-                else if(alertLevel == AlertLevel.Info)
+                else if (alertLevel == AlertLevel.Info)
                     _logger.Information(_loggerContext, ex, "Command Info {0} retry {1}", messageType, messageToHandle.DeliveryCount);
                 await AbandonMessage(messageToHandle, session).ConfigureAwait(false);
             }
             catch (Exception ex2)
             {
-                if(alertLevel == AlertLevel.Error)
+                if (alertLevel == AlertLevel.Error)
                     _logger.Error(_loggerContext, ex, "Command Retry Error {0} retry {1}", messageType, messageToHandle.DeliveryCount);
-                else if(alertLevel == AlertLevel.Warning)
+                else if (alertLevel == AlertLevel.Warning)
                     _logger.Warning(_loggerContext, ex, "Command Retry Warning {0} retry {1}", messageType, messageToHandle.DeliveryCount);
-                else if(alertLevel == AlertLevel.Info)
+                else if (alertLevel == AlertLevel.Info)
                     _logger.Information(_loggerContext, ex, "Command Retry Info {0} retry {1}", messageType, messageToHandle.DeliveryCount);
             }
         }
@@ -187,12 +183,12 @@ namespace HighIronRanch.Azure.ServiceBus
             stopwatch.Start();
             await messageToHandle.AbandonAsync().ConfigureAwait(false);
             stopwatch.Stop();
-            _handlerStatusProcessor.BusAbandon(handlerType?.FullName, messageToHandle.SessionId, stopwatch.ElapsedMilliseconds / 1000.0);            
+            _handlerStatusProcessor.BusAbandon(handlerType?.FullName, messageToHandle.SessionId, stopwatch.ElapsedMilliseconds / 1000.0);
         }
 
         public async Task OnCloseSessionAsync(MessageSession session)
         {
-            
+
         }
 
         public async Task OnSessionLostAsync(Exception exception)

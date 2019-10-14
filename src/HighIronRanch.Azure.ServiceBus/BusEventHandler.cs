@@ -46,7 +46,6 @@ namespace HighIronRanch.Azure.ServiceBus
         {            
             var eventType = Type.GetType(eventToHandle.ContentType);
             var stopwatch = new Stopwatch();
-            var messageTimeout = SessionAttribute.GetWaitTimeForType(eventType, _defaultWaitSeconds);
             Type lasthandlerType = null;
             try
             {
@@ -68,8 +67,7 @@ namespace HighIronRanch.Azure.ServiceBus
                 }
 
                 var handlerTypes = _eventHandlers[eventType];
-
-                //var cancellationTokenSource = new CancellationTokenSource((int)messageTimeout.TotalMilliseconds);                
+              
                 var cancellationTokenSource = new CancellationTokenSource();                
 
                 foreach (var handlerType in handlerTypes)

@@ -164,23 +164,31 @@ namespace HighIronRanch.Azure.ServiceBus
         {
             var cleansedTopicName = CreateTopicName(topicName);
             var cleansedSubscriptionName = CreateSubscriptionName(subscriptionName);
+            var topicSubscriptionName = cleansedTopicName + "|" + cleansedSubscriptionName;
 
-            try
+            var isPreviouslyCreated = await _serviceBusTypeStateService.GetIsSubscriptionCreated(topicSubscriptionName).ConfigureAwait(false);
+
+            if (!isPreviouslyCreated)
             {
-                var subscription = await _manager.GetSubscriptionAsync(cleansedTopicName, cleansedSubscriptionName).ConfigureAwait(false);
-                if (subscription.RequiresSession == !isSessionRequired)
+                try
                 {
-                    // the event has changed from/to an aggregate event, so the subscription needs to be removed and re-added to set the session flag
-                    await _manager.DeleteSubscriptionAsync(cleansedTopicName, cleansedSubscriptionName).ConfigureAwait(false);
-                    subscription.RequiresSession = isSessionRequired;
-                    await _manager.CreateSubscriptionAsync(subscription).ConfigureAwait(false);
+                    var subscription = await _manager.GetSubscriptionAsync(cleansedTopicName, cleansedSubscriptionName)
+                        .ConfigureAwait(false);
+                    if (subscription.RequiresSession == !isSessionRequired)
+                    {
+                        // the event has changed from/to an aggregate event, so the subscription needs to be removed and re-added to set the session flag
+                        await _manager.DeleteSubscriptionAsync(cleansedTopicName, cleansedSubscriptionName)
+                            .ConfigureAwait(false);
+                        subscription.RequiresSession = isSessionRequired;
+                        await _manager.CreateSubscriptionAsync(subscription).ConfigureAwait(false);
+                    }
                 }
-            }
-            catch (MessagingEntityNotFoundException)
-            {
-                var sd = new SubscriptionDescription(cleansedTopicName, cleansedSubscriptionName);
-                sd.RequiresSession = true;
-                await _manager.CreateSubscriptionAsync(sd).ConfigureAwait(false);
+                catch (MessagingEntityNotFoundException)
+                {
+                    var sd = new SubscriptionDescription(cleansedTopicName, cleansedSubscriptionName);
+                    sd.RequiresSession = true;
+                    await _manager.CreateSubscriptionAsync(sd).ConfigureAwait(false);
+                }
             }
 
             return SubscriptionClient.CreateFromConnectionString(_settings.AzureServiceBusConnectionString, cleansedTopicName, cleansedSubscriptionName);

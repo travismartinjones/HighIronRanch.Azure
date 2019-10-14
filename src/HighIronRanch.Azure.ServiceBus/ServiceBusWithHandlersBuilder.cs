@@ -175,9 +175,7 @@ namespace HighIronRanch.Azure.ServiceBus
                 _defaultWaitSeconds,
                 _autoRenewMultiplier);
 
-		    ServiceBusEnvironment.SystemConnectivity.Mode = ConnectivityMode.Https;
-
-			// set multiple deployments first because json serialization is true in ServiceBus by default
+            // set multiple deployments first because json serialization is true in ServiceBus by default
 			// this will prevent any exception
 			bus.HasMultipleDeployments(_hasMultipleDeployments);
 			bus.UseJsonMessageSerialization(_useJsonSerialization);
