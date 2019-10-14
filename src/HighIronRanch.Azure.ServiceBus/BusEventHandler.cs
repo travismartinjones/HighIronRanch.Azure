@@ -22,7 +22,6 @@ namespace HighIronRanch.Azure.ServiceBus
         private readonly ILogger _logger;
         private readonly IHandlerStatusProcessor _handlerStatusProcessor;
         private readonly string _loggerContext;
-        private readonly int _defaultWaitSeconds;
         private const int MaximumEventDeliveryCount = 10;
 
         public BusEventHandler(
@@ -30,15 +29,14 @@ namespace HighIronRanch.Azure.ServiceBus
             IDictionary<Type, ISet<Type>> eventHandlers,
             ILogger logger,
             IHandlerStatusProcessor handlerStatusProcessor,            
-            string loggerContext,
-            int defaultWaitSeconds)
+            string loggerContext
+        )
         {
             _handlerActivator = handlerActivator;
             _eventHandlers = eventHandlers;
             _logger = logger;
             _handlerStatusProcessor = handlerStatusProcessor;            
             _loggerContext = loggerContext;
-            _defaultWaitSeconds = defaultWaitSeconds;
         }
 
         public async Task OnMessageAsync(Func<Task> renewAction, IReceiverClient session, Message eventToHandle)

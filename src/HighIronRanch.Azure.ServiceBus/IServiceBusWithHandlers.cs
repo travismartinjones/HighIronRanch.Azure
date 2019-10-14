@@ -10,6 +10,6 @@ namespace HighIronRanch.Azure.ServiceBus
         Task SendAsync(ICommand command, DateTime? enqueueTime = null);
         Task SendAsync(ICommand command, EnqueueOptions options);
         Task PublishAsync(IEvent evt);
-        Task StartHandlers(ServiceBusConnection connection);
+        Task StartHandlers();
     }
 }

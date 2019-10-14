@@ -35,7 +35,6 @@ namespace HighIronRanch.Azure.ServiceBus
         private readonly int _maxConcurrentSessions;
         private readonly int _defaultWaitSeconds;
         private readonly int _autoRenewMultiplier;
-        private readonly double _connectionTimeoutSeconds;
 
         public ServiceBusWithHandlersBuilder(
             IServiceBus serviceBus, 
@@ -46,8 +45,7 @@ namespace HighIronRanch.Azure.ServiceBus
             IServiceBusSettings serviceBusSettings,
             int maxConcurrentSessions,
             int defaultWaitSeconds,
-            int autoRenewMultiplier,
-            double? connectionTimeoutSeconds = 60)
+            int autoRenewMultiplier)
         {
             _serviceBus = serviceBus;
             _handlerActivator = handlerActivator;
@@ -58,7 +56,6 @@ namespace HighIronRanch.Azure.ServiceBus
             _maxConcurrentSessions = maxConcurrentSessions;
             _defaultWaitSeconds = defaultWaitSeconds;
             _autoRenewMultiplier = autoRenewMultiplier;
-            _connectionTimeoutSeconds = connectionTimeoutSeconds ?? 60;
         }
 
 		public ServiceBusWithHandlersBuilder CreateServiceBus()
@@ -169,49 +166,44 @@ namespace HighIronRanch.Azure.ServiceBus
 		{
 			var bus = new ServiceBusWithHandlers(_serviceBus, _handlerActivator, _logger, _handlerStatusProcessor, _scheduledMessageRepository, _maxConcurrentSessions, _defaultWaitSeconds, _autoRenewMultiplier);
 
-            var connection = new ServiceBusConnection(_serviceBusSettings.AzureServiceBusConnectionString)
-            {
-                OperationTimeout = TimeSpan.FromSeconds(_connectionTimeoutSeconds)
-            };
+            await CreateHandledQueuesInAssembliesAsync(bus).ConfigureAwait(false);
 
-            await CreateHandledQueuesInAssembliesAsync(connection, bus).ConfigureAwait(false);
+			await CreateSpecificHandledQueuesAsync(bus).ConfigureAwait(false);
 
-			await CreateSpecificHandledQueuesAsync(connection, bus).ConfigureAwait(false);
+			await CreateQueuesInAssembliesAsync(bus).ConfigureAwait(false);
 
-			await CreateQueuesInAssembliesAsync(connection, bus).ConfigureAwait(false);
+			await CreateSpecificQueuesAsync(bus).ConfigureAwait(false);
 
-			await CreateSpecificQueuesAsync(connection, bus).ConfigureAwait(false);
+			await CreateHandledEventsInAssembliesAsync(bus).ConfigureAwait(false);
 
-			await CreateHandledEventsInAssembliesAsync(connection, bus).ConfigureAwait(false);
+			await CreateSpecificHandledEventsAsync(bus).ConfigureAwait(false);
 
-			await CreateSpecificHandledEventsAsync(connection, bus).ConfigureAwait(false);
+			await CreateEventsInAssembliesAsync(bus).ConfigureAwait(false);
 
-			await CreateEventsInAssembliesAsync(connection, bus).ConfigureAwait(false);
+			await CreateSpecificEventsAsync(bus).ConfigureAwait(false);
 
-			await CreateSpecificEventsAsync(connection, bus).ConfigureAwait(false);
-
-		    await bus.StartHandlers(connection).ConfigureAwait(false);
+		    await bus.StartHandlers().ConfigureAwait(false);
 
 			return bus;
 		}
 
-		private async Task CreateSpecificQueuesAsync(ServiceBusConnection connection, ServiceBusWithHandlers bus)
+		private async Task CreateSpecificQueuesAsync(ServiceBusWithHandlers bus)
 		{
 			if (_messageTypes != null)
 			{
-				await CreateQueuesAsync(connection, _messageTypes, bus).ConfigureAwait(false);
+				await CreateQueuesAsync(_messageTypes, bus).ConfigureAwait(false);
 			}
 		}
 
-		private async Task CreateSpecificEventsAsync(ServiceBusConnection connection, ServiceBusWithHandlers bus)
+		private async Task CreateSpecificEventsAsync(ServiceBusWithHandlers bus)
 		{
 			if (_eventTypes != null)
 			{
-				await CreateEventsAsync(connection, _eventTypes, bus).ConfigureAwait(false);
+				await CreateEventsAsync(_eventTypes, bus).ConfigureAwait(false);
 			}
 		}
 
-		private async Task CreateQueuesInAssembliesAsync(ServiceBusConnection connection, ServiceBusWithHandlers bus)
+		private async Task CreateQueuesInAssembliesAsync(ServiceBusWithHandlers bus)
 		{
 			if (_messageAssembliesToScan != null)
 			{
@@ -225,11 +217,11 @@ namespace HighIronRanch.Azure.ServiceBus
                 var found = string.Join(",", commandTypesInAssemblies.Select(e => e.Name));
                 _logger.Debug(ServiceBusWithHandlers.LoggerContext, "Found the following commands: {0}", found);
 
-                await CreateQueuesAsync(connection, commandTypesInAssemblies, bus).ConfigureAwait(false);
+                await CreateQueuesAsync(commandTypesInAssemblies, bus).ConfigureAwait(false);
 			}
 		}
 
-		private async Task CreateEventsInAssembliesAsync(ServiceBusConnection connection, ServiceBusWithHandlers bus)
+		private async Task CreateEventsInAssembliesAsync(ServiceBusWithHandlers bus)
 		{
 			if (_eventAssembliesToScan != null)
 			{
@@ -243,23 +235,23 @@ namespace HighIronRanch.Azure.ServiceBus
                 var found = string.Join(",", eventTypesInAssemblies.Select(e => e.Name));
                 _logger.Debug(ServiceBusWithHandlers.LoggerContext, "Found the following events: {0}", found);
 
-				await CreateEventsAsync(connection, eventTypesInAssemblies, bus).ConfigureAwait(false);
+				await CreateEventsAsync(eventTypesInAssemblies, bus).ConfigureAwait(false);
 			}
 		}
 
-		private async Task CreateSpecificHandledQueuesAsync(ServiceBusConnection connection, ServiceBusWithHandlers bus)
+		private async Task CreateSpecificHandledQueuesAsync(ServiceBusWithHandlers bus)
 		{
 			if (_messageHandlerTypes != null)
 			{
-				await CreateHandledQueuesAsync(connection, _messageHandlerTypes, bus).ConfigureAwait(false);
+				await CreateHandledQueuesAsync(_messageHandlerTypes, bus).ConfigureAwait(false);
 			}
 		}
 
-		private async Task CreateSpecificHandledEventsAsync(ServiceBusConnection connection, ServiceBusWithHandlers bus)
+		private async Task CreateSpecificHandledEventsAsync(ServiceBusWithHandlers bus)
 		{
 			if (_eventHandlerTypes != null)
 			{
-				await CreateHandledEventsAsync(connection, _eventHandlerTypes, bus).ConfigureAwait(false);
+				await CreateHandledEventsAsync(_eventHandlerTypes, bus).ConfigureAwait(false);
 			}
 		}
 
@@ -271,7 +263,7 @@ namespace HighIronRanch.Azure.ServiceBus
 				.Where(assembly => assemblies.Contains(assembly.GetName().Name));
 		} 
 
-		private async Task CreateHandledEventsInAssembliesAsync(ServiceBusConnection connection, ServiceBusWithHandlers bus)
+		private async Task CreateHandledEventsInAssembliesAsync(ServiceBusWithHandlers bus)
 		{
 			if (_eventHandlerAssembliesToScan != null)
 			{
@@ -285,11 +277,11 @@ namespace HighIronRanch.Azure.ServiceBus
                 var found = string.Join(",", eventHandlerTypesInAssemblies.Select(e => e.Name));
                 _logger.Debug(ServiceBusWithHandlers.LoggerContext, "Found the following event handlers: {0}", found);
 
-                await CreateHandledEventsAsync(connection, eventHandlerTypesInAssemblies, bus).ConfigureAwait(false);
+                await CreateHandledEventsAsync(eventHandlerTypesInAssemblies, bus).ConfigureAwait(false);
 			}
 		}
 
-		private async Task CreateHandledQueuesInAssembliesAsync(ServiceBusConnection connection, ServiceBusWithHandlers bus)
+		private async Task CreateHandledQueuesInAssembliesAsync(ServiceBusWithHandlers bus)
 		{
 			if (_messageHandlerAssembliesToScan != null)
 			{
@@ -303,39 +295,39 @@ namespace HighIronRanch.Azure.ServiceBus
                 var found = string.Join(",", handlerTypesInAssemblies.Select(e => e.Name));
                 _logger.Debug(ServiceBusWithHandlers.LoggerContext, "Found the following command handlers: {0}", found);
 
-                await CreateHandledQueuesAsync(connection, handlerTypesInAssemblies, bus).ConfigureAwait(false);
+                await CreateHandledQueuesAsync(handlerTypesInAssemblies, bus).ConfigureAwait(false);
 			}
 		}
 
-		private async Task CreateQueuesAsync(ServiceBusConnection connection, IEnumerable<Type> commandTypes, ServiceBusWithHandlers bus)
+		private async Task CreateQueuesAsync(IEnumerable<Type> commandTypes, ServiceBusWithHandlers bus)
 		{
 			foreach (var commandType in commandTypes)
 			{
-				await bus.CreateQueueAsync(connection, commandType).ConfigureAwait(false);
+				await bus.CreateQueueAsync(commandType).ConfigureAwait(false);
 			}
 		}
 
-		private async Task CreateEventsAsync(ServiceBusConnection connection, IEnumerable<Type> eventTypes, ServiceBusWithHandlers bus)
+		private async Task CreateEventsAsync(IEnumerable<Type> eventTypes, ServiceBusWithHandlers bus)
 		{
 			foreach (var eventType in eventTypes)
 			{
-				await bus.CreateTopicAsync(connection, eventType).ConfigureAwait(false);
+				await bus.CreateTopicAsync(eventType).ConfigureAwait(false);
 			}
 		}
 
-		private async Task CreateHandledQueuesAsync(ServiceBusConnection connection, IEnumerable<Type> handlerTypes, ServiceBusWithHandlers bus)
+		private async Task CreateHandledQueuesAsync(IEnumerable<Type> handlerTypes, ServiceBusWithHandlers bus)
 		{
 			foreach (var handlerType in handlerTypes)
 			{
-				await bus.CreateHandledQueueAsync(connection, handlerType).ConfigureAwait(false);
+				await bus.CreateHandledQueueAsync(handlerType).ConfigureAwait(false);
 			}
 		}
 
-		private async Task CreateHandledEventsAsync(ServiceBusConnection connection, IEnumerable<Type> eventHandlerTypes, ServiceBusWithHandlers bus)
+		private async Task CreateHandledEventsAsync(IEnumerable<Type> eventHandlerTypes, ServiceBusWithHandlers bus)
 		{
 			foreach (var eventType in eventHandlerTypes)
 			{
-				await bus.CreateHandledEventAsync(connection, eventType).ConfigureAwait(false);
+				await bus.CreateHandledEventAsync(eventType).ConfigureAwait(false);
 			}
 		}
 	}

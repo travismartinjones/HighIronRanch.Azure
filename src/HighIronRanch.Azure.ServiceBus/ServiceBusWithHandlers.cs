@@ -28,8 +28,6 @@ namespace HighIronRanch.Azure.ServiceBus
         // https://github.com/Azure/azure-service-bus/blob/master/samples/DotNet/Microsoft.ServiceBus.Messaging/Prefetch/Program.cs
 	    private static int MessagePrefetchSize = 10;
 		private readonly IServiceBus _serviceBus;
-		private bool _hasMultipleDeployments = true;
-		private bool _useJsonSerialization = true;
 		private readonly IHandlerActivator _handlerActivator;
 		private readonly ILogger _logger;
         private readonly IHandlerStatusProcessor _handlerStatusProcessor;
@@ -37,7 +35,6 @@ namespace HighIronRanch.Azure.ServiceBus
         private readonly int _maxConcurrentSessions;
         private readonly int _defaultWaitSeconds;
         private readonly int _autoRenewMultiplier;
-        protected CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
         
 		// ICommand, QueueClient
 		protected readonly IDictionary<Type, QueueClient> _queueClients = new ConcurrentDictionary<Type, QueueClient>();
@@ -51,9 +48,8 @@ namespace HighIronRanch.Azure.ServiceBus
 		// IEvent, ISet<IEventHandler>
 		protected readonly IDictionary<Type, ISet<Type>> _eventHandlers = new ConcurrentDictionary<Type, ISet<Type>>();	    
 
-	    public ServiceBusWithHandlers(
-            IServiceBus serviceBus, 
-            IHandlerActivator handlerActivator, 
+	    public ServiceBusWithHandlers(IServiceBus serviceBus,
+            IHandlerActivator handlerActivator,
             ILogger logger,
             IHandlerStatusProcessor handlerStatusProcessor,
             IScheduledMessageRepository scheduledMessageRepository,
@@ -62,7 +58,7 @@ namespace HighIronRanch.Azure.ServiceBus
             int autoRenewMultiplier)
 		{
 			_serviceBus = serviceBus;
-			_handlerActivator = handlerActivator;
+            _handlerActivator = handlerActivator;
 			_logger = logger;
             _handlerStatusProcessor = handlerStatusProcessor;
             _scheduledMessageRepository = scheduledMessageRepository;
@@ -70,49 +66,19 @@ namespace HighIronRanch.Azure.ServiceBus
             _defaultWaitSeconds = defaultWaitSeconds;
             _autoRenewMultiplier = autoRenewMultiplier;
         }
-        
-		/// <summary>
-		/// When true, messages are serialized as json which is humanly readable in 
-		/// Service Bus Explorer. Otherwise, messages are serialized with Azure
-		/// Service Bus' default method which is not humanly readable.
-		/// Json serialization is required when using multiple deployments.
-		/// Default is true.
-		/// </summary>
-		public void UseJsonMessageSerialization(bool useJsonSerialization)
-		{
-			if (!useJsonSerialization && _hasMultipleDeployments)
-				throw new ArgumentException("Json serialization is required when using multiple deployments.");
 
-			_useJsonSerialization = useJsonSerialization;
-		}
-
-		/// <summary>
-		/// When true, tells ServiceBus to only execute EventHandlers once across multiple 
-		/// deployments such as a webfarm. Otherwise, event handling a bit simpler in a
-		/// standalone deployment where redundancy is not important. Json serialization 
-		/// is required when using multiple deployments.
-		/// Default is true.
-		/// </summary>
-		public void HasMultipleDeployments(bool hasMultipleDeployments)
-		{
-			if (hasMultipleDeployments && !_useJsonSerialization)
-				throw new ArgumentException("Json serialization is required when using multiple deployments.");
-
-			_hasMultipleDeployments = hasMultipleDeployments;
-		}
-
-        internal async Task CreateQueueAsync(ServiceBusConnection connection, Type type)
+        internal async Task CreateQueueAsync(Type type)
         {
             if (_queueClients.ContainsKey(type))
                 return;
 
             var isCommand = typeof(IAggregateCommand).IsAssignableFrom(type);
             
-            var client = await _serviceBus.CreateQueueClientAsync(connection, type.FullName, isCommand).ConfigureAwait(false);
+            var client = await _serviceBus.CreateQueueClientAsync(type.FullName, isCommand).ConfigureAwait(false);
             _queueClients.Add(type, client);
         }
 
-        internal async Task CreateHandledQueueAsync(ServiceBusConnection connection, Type handlerType)
+        internal async Task CreateHandledQueueAsync(Type handlerType)
         {
             if (_queueHandlers.Values.Contains(handlerType))
                 return;
@@ -122,7 +88,7 @@ namespace HighIronRanch.Azure.ServiceBus
 
             foreach (var messageType in messageTypes)
             {
-                await CreateQueueAsync(connection, messageType).ConfigureAwait(false);
+                await CreateQueueAsync(messageType).ConfigureAwait(false);
                 _queueHandlers.Add(messageType, handlerType);
             }
         }
@@ -287,16 +253,16 @@ namespace HighIronRanch.Azure.ServiceBus
 		    _logger.Information(LoggerContext, "Sent command {0}", command.GetType().ToString());
 		}
 
-        internal async Task CreateTopicAsync(ServiceBusConnection connection, Type type)
+        internal async Task CreateTopicAsync(Type type)
         {
             if (_topicClients.ContainsKey(type))
                 return;
             
-            var client = await _serviceBus.CreateTopicClientAsync(connection, type.FullName).ConfigureAwait(false);
+            var client = await _serviceBus.CreateTopicClientAsync(type.FullName).ConfigureAwait(false);
             _topicClients.Add(type, client);
         }
 
-        internal async Task CreateHandledEventAsync(ServiceBusConnection connection, Type handlerType)
+        internal async Task CreateHandledEventAsync(Type handlerType)
         {
             if (_eventHandlers.Values.Any(v => v.Contains(handlerType)))
                 return;
@@ -306,7 +272,7 @@ namespace HighIronRanch.Azure.ServiceBus
 
             foreach (var eventType in eventTypes)
             {
-                await CreateTopicAsync(connection, eventType).ConfigureAwait(false);
+                await CreateTopicAsync(eventType).ConfigureAwait(false);
                 if (_eventHandlers.ContainsKey(eventType))
                 {
                     _eventHandlers[eventType].Add(handlerType);
@@ -352,24 +318,24 @@ namespace HighIronRanch.Azure.ServiceBus
             }
         }        
 
-        public async Task StartHandlers(ServiceBusConnection connection)
+        public async Task StartHandlers()
         {
-            await StartCommandHandlers(connection).ConfigureAwait(false);
-            await StartEventHandlers(connection).ConfigureAwait(false);
+            await StartCommandHandlers().ConfigureAwait(false);
+            await StartEventHandlers().ConfigureAwait(false);
         }
 
-        private async Task StartEventHandlers(ServiceBusConnection connection)
+        private async Task StartEventHandlers()
         {
             foreach (var eventType in _eventHandlers.Keys)
-                await StartEventHandler(connection, eventType).ConfigureAwait(false);
+                await StartEventHandler(eventType).ConfigureAwait(false);
         }
 
-        private async Task StartEventHandler(ServiceBusConnection connection, Type eventType)
+        private async Task StartEventHandler(Type eventType)
         {
             try
             {
                 var isAggregateEvent = typeof(IAggregateEvent).IsAssignableFrom(eventType);
-                var client = await _serviceBus.CreateSubscriptionClientAsync(connection, eventType.FullName, eventType.Name, isAggregateEvent).ConfigureAwait(false);
+                var client = await _serviceBus.CreateSubscriptionClientAsync(eventType.FullName, eventType.Name, isAggregateEvent).ConfigureAwait(false);
 
                 if (isAggregateEvent)
                 {
@@ -390,9 +356,10 @@ namespace HighIronRanch.Azure.ServiceBus
                         try
                         {
                             await new BusEventHandler(_handlerActivator, _eventHandlers, _logger,
-                                    _handlerStatusProcessor, LoggerContext, _defaultWaitSeconds)
+                                    _handlerStatusProcessor, LoggerContext)
                                 .OnMessageAsync(async () => await session.RenewSessionLockAsync().ConfigureAwait(false),
                                     session, message).ConfigureAwait(false);
+                            await session.CloseAsync().ConfigureAwait(false);
                         }
                         catch (Exception ex)
                         {
@@ -417,7 +384,7 @@ namespace HighIronRanch.Azure.ServiceBus
                         try
                         {
                             await new BusEventHandler(_handlerActivator, _eventHandlers, _logger,
-                                    _handlerStatusProcessor, LoggerContext, _defaultWaitSeconds)
+                                    _handlerStatusProcessor, LoggerContext)
                                 .OnMessageAsync(async () => { }, client, message).ConfigureAwait(false);
                         }
                         catch (Exception ex)
@@ -433,7 +400,7 @@ namespace HighIronRanch.Azure.ServiceBus
             }
         }
 
-        private async Task StartCommandHandlers(ServiceBusConnection connection)
+        private async Task StartCommandHandlers()
         {
             foreach (var messageType in _queueHandlers.Keys)
                 await StartCommandHandler(messageType).ConfigureAwait(false);
