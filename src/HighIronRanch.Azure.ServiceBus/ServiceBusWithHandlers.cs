@@ -1,4 +1,5 @@
 using System;
+using System.CodeDom;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
@@ -31,6 +32,7 @@ namespace HighIronRanch.Azure.ServiceBus
         private readonly int _maxConcurrentSessions;
         private readonly int _defaultWaitSeconds;
         private readonly int _autoRenewMultiplier;
+        public TaskCompletionSource<bool> IsLoadedTaskCompletionSource { get; } = new TaskCompletionSource<bool>();
         protected CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
         
 		// ICommand, QueueClient
@@ -104,9 +106,11 @@ namespace HighIronRanch.Azure.ServiceBus
 
 			var isCommand = typeof(IAggregateCommand).IsAssignableFrom(type);
 
-			_logger.Information(LoggerContext, "Creating {0} queue for {1}", isCommand ? "command" : "message", type);
+            var queueName = QueueNameAttribute.GetQueueNameForType(type);
 
-			var client = await _serviceBus.CreateQueueClientAsync(type.FullName, isCommand).ConfigureAwait(false);		    
+			_logger.Information(LoggerContext, "Creating {0} queue {1} for {2}", isCommand ? "command" : "message", queueName, type);
+
+			var client = await _serviceBus.CreateQueueClientAsync(queueName, isCommand).ConfigureAwait(false);		    
 		    _queueClients.Add(type, client);
 		}
 
@@ -136,6 +140,10 @@ namespace HighIronRanch.Azure.ServiceBus
 		public async Task SendAsync(ICommand command, EnqueueOptions options)
 		{
 			var isCommand = command is IAggregateCommand;
+            var clientKey = command.GetType();
+            if(!_queueClients.ContainsKey(clientKey))
+                throw new Exception($"Command {command.GetType()} was not found in the list of known queue clients.");
+
 			var client = _queueClients[command.GetType()];
 
             // if the enqueue time is 2 seconds or less, the user is really wanting this message
@@ -289,9 +297,11 @@ namespace HighIronRanch.Azure.ServiceBus
 			if (_topicClients.ContainsKey(type))
 				return;
 
-			_logger.Information(LoggerContext, "Creating topic for {0}", type);
+            var topicName = TopicNameAttribute.GetTopicNameForType(type);
 
-			var client = await _serviceBus.CreateTopicClientAsync(type.FullName).ConfigureAwait(false);            
+			_logger.Information(LoggerContext, "Creating topic {0} for {1}", topicName, type);
+
+			var client = await _serviceBus.CreateTopicClientAsync(topicName).ConfigureAwait(false);            
 			_topicClients.Add(type, client);
 
 			// Create queues for the events in a multiple deployment environment
@@ -324,8 +334,12 @@ namespace HighIronRanch.Azure.ServiceBus
 		}
 
 		public async Task PublishAsync(IEvent evt)
-		{
-			var client = _topicClients[evt.GetType()];
+        {
+            var topicKey = evt.GetType();
+            if(!_topicClients.ContainsKey(topicKey))
+                throw new Exception($"Event {topicKey} was not found in the list of known topic clients.");
+
+			var client = _topicClients[topicKey];
 
 			BrokeredMessage brokeredMessage;
 
@@ -356,13 +370,15 @@ namespace HighIronRanch.Azure.ServiceBus
 	    public async Task<long> GetMessageCount(Type type)
 	    {
 	        if (type.DoesTypeImplementInterface(typeof(ICommand)))
-	        {
-	            return await _serviceBus.GetQueueLengthAsync(type.FullName).ConfigureAwait(false);
+            {
+                var name = QueueNameAttribute.GetQueueNameForType(type);
+	            return await _serviceBus.GetQueueLengthAsync(name).ConfigureAwait(false);
 	        }
 
 	        if (!type.DoesTypeImplementInterface(typeof(ICommand)))
-	        {
-	            return await _serviceBus.GetTopicLengthAsync(type.FullName).ConfigureAwait(false);
+            {
+                var name = TopicNameAttribute.GetTopicNameForType(type);
+	            return await _serviceBus.GetTopicLengthAsync(name).ConfigureAwait(false);
 	        }
 
 	        return 0;
@@ -373,7 +389,8 @@ namespace HighIronRanch.Azure.ServiceBus
 	        if (type.DoesTypeImplementInterface(typeof(ICommand)))
 	        {
 	            var isCommand = typeof(IAggregateCommand).IsAssignableFrom(type);
-	            return await _serviceBus.GetQueueSessionLengthAsync(type.FullName, isCommand, sessionId).ConfigureAwait(false);
+                var name = QueueNameAttribute.GetQueueNameForType(type);
+	            return await _serviceBus.GetQueueSessionLengthAsync(name, isCommand, sessionId).ConfigureAwait(false);
 	        }
             
 	        return 0;
@@ -464,7 +481,8 @@ namespace HighIronRanch.Azure.ServiceBus
 		            {
 		                var isAggregateEvent = typeof(IAggregateEvent).IsAssignableFrom(eventType);
 
-		                var client = await _serviceBus.CreateSubscriptionClientAsync(eventType.FullName, eventType.Name, isAggregateEvent).ConfigureAwait(false);
+                        var topicName = TopicNameAttribute.GetTopicNameForType(eventType);
+		                var client = await _serviceBus.CreateSubscriptionClientAsync(topicName, eventType.Name, isAggregateEvent).ConfigureAwait(false);
 
 		                if (_hasMultipleDeployments)
 		                {
@@ -526,7 +544,8 @@ namespace HighIronRanch.Azure.ServiceBus
 		                _logger.Error(LoggerContext, ex, "Error starting event handler for type {0}", eventType.ToString());
 		            }
 		        });
-		    });
+                IsLoadedTaskCompletionSource.SetResult(true);
+            });
 		}
 	}
 }

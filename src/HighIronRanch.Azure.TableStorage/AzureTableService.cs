@@ -1,15 +1,10 @@
 ﻿using System.Text.RegularExpressions;
-using Microsoft.WindowsAzure.Storage;
-using Microsoft.WindowsAzure.Storage.Table;
+using System.Threading.Tasks;
+using Microsoft.Azure.Cosmos.Table;
 
 namespace HighIronRanch.Azure.TableStorage
 {
-	public interface IAzureTableSettings
-	{
-		string AzureStorageConnectionString { get; }
-	}
-
-	public class AzureTableService : IAzureTableService
+    public class AzureTableService : IAzureTableService
 	{
 		private readonly IAzureTableSettings _appSettings;
 
@@ -23,7 +18,7 @@ namespace HighIronRanch.Azure.TableStorage
 			return Regex.Replace(uncleanTableName, @"[^a-zA-Z0-9]", "");
 		}
 
-		public CloudTable GetTable(string tableName, bool shouldCreateIfNotExists)
+		public async Task<CloudTable> GetTable(string tableName, bool shouldCreateIfNotExists)
 		{
 			var client = CloudStorageAccount.Parse(_appSettings.AzureStorageConnectionString).CreateCloudTableClient();
 			
@@ -31,13 +26,13 @@ namespace HighIronRanch.Azure.TableStorage
 			
 			var table = client.GetTableReference(cleansedTableName);
 			if(shouldCreateIfNotExists)
-				table.CreateIfNotExists();
+				await table.CreateIfNotExistsAsync().ConfigureAwait(false);
 			return table;
 		}
 
-		public CloudTable GetTable(string tableName)
+		public async Task<CloudTable> GetTable(string tableName)
 		{
-			return GetTable(tableName, true);
+			return await GetTable(tableName, true).ConfigureAwait(false);
 		}
 
 	}

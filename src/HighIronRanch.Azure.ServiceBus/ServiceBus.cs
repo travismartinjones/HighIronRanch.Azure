@@ -74,10 +74,9 @@ namespace HighIronRanch.Azure.ServiceBus
         protected string CreateSubscriptionName(string name)
         {
             // Use the hashcode to shorten the name and still have a good guarantee of uniqueness
-            var subname = string.Format("s.{0}{1}.{2}",
+            var subname = string.Format("s.{0}{1}",
                 CreatePrefix(),
-                _settings.ServiceBusSubscriptionNamePrefix,
-                CleanseName(name).GetHashCode());
+                _settings.ServiceBusSubscriptionNamePrefix);
 
             if (subname.Length > 50)
                 throw new ArgumentException("Resulting subscription name '" + subname + "' is longer than 50 character limit", "name");
@@ -181,6 +180,7 @@ namespace HighIronRanch.Azure.ServiceBus
                             .ConfigureAwait(false);
                         subscription.RequiresSession = isSessionRequired;
                         await _manager.CreateSubscriptionAsync(subscription).ConfigureAwait(false);
+                        await _serviceBusTypeStateService.OnSubscriptionCreated(topicSubscriptionName).ConfigureAwait(false);
                     }
                 }
                 catch (MessagingEntityNotFoundException)
@@ -188,6 +188,7 @@ namespace HighIronRanch.Azure.ServiceBus
                     var sd = new SubscriptionDescription(cleansedTopicName, cleansedSubscriptionName);
                     sd.RequiresSession = true;
                     await _manager.CreateSubscriptionAsync(sd).ConfigureAwait(false);
+                    await _serviceBusTypeStateService.OnSubscriptionCreated(topicSubscriptionName).ConfigureAwait(false);
                 }
             }
 
