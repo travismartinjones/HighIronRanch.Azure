@@ -101,37 +101,78 @@ namespace HighIronRanch.Azure.ServiceBus
             }
             catch (TimeoutException ex)
             {
-                _handlerStatusProcessor.Abandon(lasthandlerType?.FullName, eventToHandle.SessionId, ex);
+                try
+                {
+                    _handlerStatusProcessor.Abandon(lasthandlerType?.FullName, eventToHandle.SessionId, ex);
+                }
+                catch
+                {
+                    _logger.Error(_loggerContext, ex, "Error abandoning event", eventType, eventToHandle.DeliveryCount);
+                }
+
                 if (eventToHandle.DeliveryCount < MaximumEventDeliveryCount)
                 {
-                    await LogAndAbandonEventError(AlertLevel.Warning, ex, eventToHandle, eventType, session)
-                        .ConfigureAwait(false);
+                    await LogAndAbandonEventError(AlertLevel.Warning, ex, eventToHandle, eventType, session).ConfigureAwait(false);
                 }
                 else
                 {
-                    await LogAndAbandonEventError(AlertLevel.Error, ex, eventToHandle, eventType, session)
-                        .ConfigureAwait(false);
+                    await LogAndAbandonEventError(AlertLevel.Error, ex, eventToHandle, eventType, session).ConfigureAwait(false);
                 }
             }
             catch (Exception ex)
             {
-                _handlerStatusProcessor.Error(lasthandlerType?.FullName, eventToHandle.SessionId, ex);
+                try
+                {
+                    _handlerStatusProcessor.Error(lasthandlerType?.FullName, eventToHandle.SessionId, ex);
+                }
+                catch
+                {
+                    _logger.Error(_loggerContext, ex, "Error marking event with error", eventType, eventToHandle.DeliveryCount);
+                }
+
                 if (eventToHandle.DeliveryCount < MaximumEventDeliveryCount)
                 {
                     // add in exponential spacing between retries
-                    await Task.Delay(SessionAttribute.GetDelayForType(eventType, eventToHandle.DeliveryCount)).ConfigureAwait(false);
-                    await LogAndAbandonEventError(AlertLevel.Warning, ex, eventToHandle, eventType, session)
-                        .ConfigureAwait(false);
+                    try
+                    {
+                        await Task.Delay(SessionAttribute.GetDelayForType(eventType, eventToHandle.DeliveryCount)).ConfigureAwait(false);
+                    }
+                    catch
+                    {
+                        _logger.Error(_loggerContext, ex, "Error resuming from delay", eventType, eventToHandle.DeliveryCount);
+                    }
+
+                    try
+                    {
+                        await LogAndAbandonEventError(AlertLevel.Warning, ex, eventToHandle, eventType, session).ConfigureAwait(false);
+                    }
+                    catch
+                    {
+                        _logger.Error(_loggerContext, ex, "Error logging and abandoning event", eventType, eventToHandle.DeliveryCount);
+                    }
                 }
                 else
                 {
-                    await LogAndAbandonEventError(AlertLevel.Error, ex, eventToHandle, eventType, session)
-                        .ConfigureAwait(false);
+                    try
+                    { 
+                        await LogAndAbandonEventError(AlertLevel.Error, ex, eventToHandle, eventType, session).ConfigureAwait(false);
+                    }
+                    catch
+                    {
+                        _logger.Error(_loggerContext, ex, "Error logging and abandoning event", eventType, eventToHandle.DeliveryCount);
+                    }
                 }
             }
             finally
             {
-                _sessionService.Remove(session);
+                try
+                {
+                    _sessionService.Remove(session);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error(_loggerContext, ex, "Error removing session", eventType, eventToHandle.DeliveryCount);
+                }
             }
         }        
 

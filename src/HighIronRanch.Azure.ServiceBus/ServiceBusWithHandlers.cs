@@ -431,6 +431,15 @@ namespace HighIronRanch.Azure.ServiceBus
 	        }
 	    }
 
+        public async Task Shutdown()
+        {
+            var queueTasks = _queueClients.Keys.Select(key => _queueClients[key]).Select(client => client.CloseAsync()).ToList();
+            await Task.WhenAll(queueTasks).ConfigureAwait(false);
+            var topicTasks = _topicClients.Keys.Select(key => _topicClients[key]).Select(client => client.CloseAsync()).ToList();
+            await Task.WhenAll(topicTasks).ConfigureAwait(false);
+            await _sessionService.ClearAll().ConfigureAwait(false);
+        }
+
 	    public async Task StartHandlers()
 		{
 		    var commandSessionHandlerFactory = new CommandSessionHandlerFactory(_handlerActivator, _queueHandlers, _logger, _handlerStatusProcessor, _scheduledMessageRepository, _sessionService, LoggerContext, _useJsonSerialization, _defaultWaitSeconds);

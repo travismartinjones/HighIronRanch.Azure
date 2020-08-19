@@ -13,6 +13,7 @@ namespace HighIronRanch.Azure.ServiceBus
         Task<long> GetMessageCount(Type type);
         Task<long> GetMessageCount(Type type, string sessionId);
         Task StartHandlers();
-        TaskCompletionSource<bool> IsLoadedTaskCompletionSource { get; } 
+        TaskCompletionSource<bool> IsLoadedTaskCompletionSource { get; }
+        Task Shutdown();
     }
 }

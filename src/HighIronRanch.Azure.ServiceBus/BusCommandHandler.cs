@@ -118,40 +118,93 @@ namespace HighIronRanch.Azure.ServiceBus
             }
             catch (TimeoutException ex)
             {
-                _handlerStatusProcessor.Abandon(handlerType?.FullName, messageToHandle.SessionId, ex);
-                if (messageToHandle.DeliveryCount < MaximumCommandDeliveryCount)
+                try
                 {
-                    await LogAndAbandonCommandError(AlertLevel.Warning, ex, messageToHandle, messageType, session)
-                        .ConfigureAwait(false);
+                    _handlerStatusProcessor.Abandon(handlerType?.FullName, messageToHandle.SessionId, ex);
                 }
-                else
+                catch
                 {
-                    await LogAndAbandonCommandError(AlertLevel.Error, ex, messageToHandle, messageType, session)
-                        .ConfigureAwait(false);
+                    _logger.Error(_loggerContext, ex, "Error abandoning command", messageType, messageToHandle.DeliveryCount);
+                }
+
+                try
+                {
+                    if (messageToHandle.DeliveryCount < MaximumCommandDeliveryCount)
+                    {
+                        await LogAndAbandonCommandError(AlertLevel.Warning, ex, messageToHandle, messageType, session)
+                            .ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        await LogAndAbandonCommandError(AlertLevel.Error, ex, messageToHandle, messageType, session)
+                            .ConfigureAwait(false);
+                    }
+                }
+                catch
+                {
+                    _logger.Error(_loggerContext, ex, "Error logging and abandoning command", messageType,
+                        messageToHandle.DeliveryCount);
                 }
             }
             catch (Exception ex)
             {
-                _handlerStatusProcessor.Error(handlerType?.FullName, messageToHandle.SessionId, ex);
+                try
+                {
+                    _handlerStatusProcessor.Error(handlerType?.FullName, messageToHandle.SessionId, ex);
+                }
+                catch
+                {
+                    _logger.Error(_loggerContext, ex, "Error setting command to error", messageType, messageToHandle.DeliveryCount);
+                }
+
                 if (messageToHandle.DeliveryCount < MaximumCommandDeliveryCount)
                 {
-                    // add in exponential spacing between retries
-                    await Task.Delay(SessionAttribute.GetDelayForType(messageType, messageToHandle.DeliveryCount)).ConfigureAwait(false);
-                    await LogAndAbandonCommandError(AlertLevel.Warning, ex, messageToHandle, messageType, session)
-                        .ConfigureAwait(false);
+                    try
+                    {
+                        // add in exponential spacing between retries
+                        await Task.Delay(SessionAttribute.GetDelayForType(messageType, messageToHandle.DeliveryCount))
+                            .ConfigureAwait(false);
+                    }
+                    catch
+                    {
+                        _logger.Error(_loggerContext, ex, "Error resuming from delay", messageType, messageToHandle.DeliveryCount);
+                    }
+
+                    try
+                    {
+                        await LogAndAbandonCommandError(AlertLevel.Warning, ex, messageToHandle, messageType, session)
+                            .ConfigureAwait(false);
+                    }
+                    catch
+                    {
+                        _logger.Error(_loggerContext, ex, "Error logging and abandoning command", messageType, messageToHandle.DeliveryCount);
+                    }
                 }
                 else
                 {
-                    await LogAndAbandonCommandError(AlertLevel.Error, ex, messageToHandle, messageType, session)
-                        .ConfigureAwait(false);
+                    try
+                    {
+                        await LogAndAbandonCommandError(AlertLevel.Error, ex, messageToHandle, messageType, session)
+                            .ConfigureAwait(false);
+                    }
+                    catch
+                    {
+                        _logger.Error(_loggerContext, ex, "Error logging and abandoning command", messageType, messageToHandle.DeliveryCount);
+                    }
                 }
             }
             finally
             {
-                _sessionService.Remove(session);
+                try
+                {
+                    _sessionService.Remove(session);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error(_loggerContext, ex, "Error removing session", messageType, messageToHandle.DeliveryCount);
+                }
             }
         }
-
 
         private async Task LogAndAbandonCommandError(AlertLevel alertLevel, Exception ex, BrokeredMessage messageToHandle, Type messageType, MessageSession session)
         {
