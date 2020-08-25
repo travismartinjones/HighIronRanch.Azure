@@ -18,6 +18,7 @@ namespace HighIronRanch.Azure.ServiceBus
         private readonly IHandlerStatusProcessor _handlerStatusProcessor;
         private readonly ISessionService _sessionService;
         private readonly int _maxConcurrentSessions;
+        private readonly int _maxConcurrentCalls;
         private readonly int _defaultWaitSeconds;
         private readonly int _autoRenewMultiplier;
 
@@ -44,6 +45,7 @@ namespace HighIronRanch.Azure.ServiceBus
             IHandlerStatusProcessor handlerStatusProcessor,
             ISessionService sessionService,
             int maxConcurrentSessions,
+            int maxConcurrentCalls,
             int defaultWaitSeconds,
             int autoRenewMultiplier)
 		{
@@ -54,6 +56,7 @@ namespace HighIronRanch.Azure.ServiceBus
             _handlerStatusProcessor = handlerStatusProcessor;
             _sessionService = sessionService;
             _maxConcurrentSessions = maxConcurrentSessions;
+            _maxConcurrentCalls = maxConcurrentCalls;
             _defaultWaitSeconds = defaultWaitSeconds;
             _autoRenewMultiplier = autoRenewMultiplier;
         }
@@ -172,6 +175,7 @@ namespace HighIronRanch.Azure.ServiceBus
                 _scheduledMessageRepository, 
                 _sessionService, 
                 _maxConcurrentSessions,
+				_maxConcurrentCalls,
                 _defaultWaitSeconds,
                 _autoRenewMultiplier);
 

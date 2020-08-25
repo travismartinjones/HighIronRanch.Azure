@@ -30,6 +30,7 @@ namespace HighIronRanch.Azure.ServiceBus
         private readonly IScheduledMessageRepository _scheduledMessageRepository;
         private readonly ISessionService _sessionService;
         private readonly int _maxConcurrentSessions;
+        private readonly int _maxConcurrentCalls;
         private readonly int _defaultWaitSeconds;
         private readonly int _autoRenewMultiplier;
         public TaskCompletionSource<bool> IsLoadedTaskCompletionSource { get; } = new TaskCompletionSource<bool>();
@@ -55,6 +56,7 @@ namespace HighIronRanch.Azure.ServiceBus
             IScheduledMessageRepository scheduledMessageRepository,
             ISessionService sessionService,
             int maxConcurrentSessions,
+            int maxConcurrentCalls,
             int defaultWaitSeconds,
             int autoRenewMultiplier)
 		{
@@ -65,6 +67,7 @@ namespace HighIronRanch.Azure.ServiceBus
             _scheduledMessageRepository = scheduledMessageRepository;
             _sessionService = sessionService;
             _maxConcurrentSessions = maxConcurrentSessions;
+            _maxConcurrentCalls = maxConcurrentCalls;
             _defaultWaitSeconds = defaultWaitSeconds;
             _autoRenewMultiplier = autoRenewMultiplier;
         }
@@ -474,7 +477,7 @@ namespace HighIronRanch.Azure.ServiceBus
 		                    client.OnMessageAsync(async c => await commandHandler.OnMessageAsync(null, c).ConfigureAwait(false), new OnMessageOptions
 		                    {
 		                        AutoComplete = false,
-		                        MaxConcurrentCalls = _maxConcurrentSessions
+		                        MaxConcurrentCalls = _maxConcurrentCalls
 		                    });
 		                }
 		            }
@@ -511,7 +514,7 @@ namespace HighIronRanch.Azure.ServiceBus
 		                        client.OnMessageAsync(HandleEventForMultipleDeployments, new OnMessageOptions
 		                        {
 		                            AutoComplete = false,
-		                            MaxConcurrentCalls = _maxConcurrentSessions
+		                            MaxConcurrentCalls = _maxConcurrentCalls
 		                        });
                             
 		                    var qclient = _queueClients[eventType];
@@ -519,7 +522,7 @@ namespace HighIronRanch.Azure.ServiceBus
 		                    qclient.OnMessageAsync(async e => await eventHandler.OnMessageAsync(null, e).ConfigureAwait(false), new OnMessageOptions
 		                    {
 		                        AutoComplete = false,
-		                        MaxConcurrentCalls = _maxConcurrentSessions
+		                        MaxConcurrentCalls = _maxConcurrentCalls
 		                    });		                    
 		                }
 		                else
@@ -543,7 +546,7 @@ namespace HighIronRanch.Azure.ServiceBus
 		                        client.OnMessageAsync(async e => await eventHandler.OnMessageAsync(null, e).ConfigureAwait(false), new OnMessageOptions
 		                        {
 		                            AutoComplete = false,
-		                            MaxConcurrentCalls = _maxConcurrentSessions
+		                            MaxConcurrentCalls = _maxConcurrentCalls
 		                        });
 		                    }
 		                }
