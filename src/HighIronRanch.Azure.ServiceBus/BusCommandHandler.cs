@@ -129,7 +129,7 @@ namespace HighIronRanch.Azure.ServiceBus
 
                 try
                 {
-                    if (messageToHandle.DeliveryCount < MaximumCommandDeliveryCount)
+                    if (messageToHandle.DeliveryCount < SessionAttribute.GetRetriesForType(messageType, MaximumCommandDeliveryCount))
                     {
                         await LogAndAbandonCommandError(AlertLevel.Warning, ex, messageToHandle, messageType, session)
                             .ConfigureAwait(false);
@@ -157,7 +157,7 @@ namespace HighIronRanch.Azure.ServiceBus
                     _logger.Error(_loggerContext, ex, "Error setting command to error", messageType, messageToHandle.DeliveryCount);
                 }
 
-                if (messageToHandle.DeliveryCount < MaximumCommandDeliveryCount)
+                if (messageToHandle.DeliveryCount < SessionAttribute.GetRetriesForType(messageType, MaximumCommandDeliveryCount))
                 {
                     try
                     {

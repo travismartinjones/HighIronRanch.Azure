@@ -110,7 +110,7 @@ namespace HighIronRanch.Azure.ServiceBus
                     _logger.Error(_loggerContext, ex, "Error abandoning event", eventType, eventToHandle.DeliveryCount);
                 }
 
-                if (eventToHandle.DeliveryCount < MaximumEventDeliveryCount)
+                if (eventToHandle.DeliveryCount < SessionAttribute.GetDelayForType(eventType, MaximumEventDeliveryCount))
                 {
                     await LogAndAbandonEventError(AlertLevel.Warning, ex, eventToHandle, eventType, session).ConfigureAwait(false);
                 }
@@ -130,7 +130,7 @@ namespace HighIronRanch.Azure.ServiceBus
                     _logger.Error(_loggerContext, ex, "Error marking event with error", eventType, eventToHandle.DeliveryCount);
                 }
 
-                if (eventToHandle.DeliveryCount < MaximumEventDeliveryCount)
+                if (eventToHandle.DeliveryCount < SessionAttribute.GetDelayForType(eventType, MaximumEventDeliveryCount))
                 {
                     // add in exponential spacing between retries
                     try
