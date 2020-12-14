@@ -6,11 +6,11 @@ namespace HighIronRanch.Azure.ServiceBus
     [AttributeUsage(AttributeTargets.Class)]
     public class SessionAttribute : Attribute
     {
-        public int? MaximumRetries { get; }
+        public int MaximumRetries { get; }
         public int[] DelayBetweenRetries { get; }
         public int TimeoutSeconds { get; }        
 
-        public SessionAttribute(int timeoutSeconds, int[] delayBetweenRetries = null, int? maximumRetries = 10)
+        public SessionAttribute(int timeoutSeconds, int[] delayBetweenRetries = null, int maximumRetries = 10)
         {
             DelayBetweenRetries = delayBetweenRetries;
             TimeoutSeconds = timeoutSeconds;
